@@ -32,7 +32,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: dasos/jumpbox
+          images: dasos/chirp
       
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
@@ -42,4 +42,5 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+
 
