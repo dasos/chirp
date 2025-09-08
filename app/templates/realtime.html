@@ -1,316 +1,533 @@
 <!-- moved to app/templates by project reorg -->
 <!doctype html>
 <html lang="en">
+
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Voice Assistant</title>
-  <style>
-    :root{
-      --text:#0f172a; --muted:#6b7280; --accent:#7c3aed; --accent2:#06b6d4;
-      --card:#fff; --border:#e5e7eb; --live:#16a34a; --shadow:0 10px 30px rgba(0,0,0,.08);
-    }
-    html,body{margin:0;background:#fff;color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif}
-    .container{max-width:760px;margin:0 auto;padding:20px 3vw 28px}
-    .hero{margin-top:clamp(40px,20vh,160px);margin-bottom:28px}
-    .card{background:var(--card);border:1px solid var(--border);border-radius:18px;padding:26px;text-align:center;box-shadow:var(--shadow)}
-    h1{margin:0 0 8px;font-size:1.25rem}
-    #status{margin:6px 0 18px;color:var(--muted)}
-    button{
-      appearance:none;border:0;padding:14px 22px;border-radius:999px;font-weight:700;cursor:pointer;color:#fff;
-      background:linear-gradient(135deg,var(--accent),var(--accent2));
-      box-shadow:0 10px 24px rgba(6,182,212,.35);
-      transition:transform .12s,box-shadow .2s,opacity .2s;
-      display:inline-flex;align-items:center;gap:10px
-    }
-    button:hover{transform:translateY(-1px);box-shadow:0 14px 30px rgba(6,182,212,.45)}
-    button:disabled{opacity:.65;cursor:not-allowed;transform:none;box-shadow:none}
-    .live button{animation:pulse 1.6s ease-in-out infinite}
-    @keyframes pulse{0%,100%{box-shadow:0 0 0 rgba(124,58,237,0),0 0 0 rgba(6,182,212,0)}50%{box-shadow:0 0 0 14px rgba(124,58,237,.08),0 0 0 28px rgba(6,182,212,.05)}}
-    .btn-icon{display:none;width:10px;height:10px;border-radius:50%;background:var(--live);box-shadow:0 0 0 0 rgba(22,163,74,.6)}
-    .live #connect .btn-icon{display:inline-block;animation:ping 1.2s cubic-bezier(0,0,.2,1) infinite}
-    @keyframes ping{0%{box-shadow:0 0 0 0 rgba(22,163,74,.6)}70%{box-shadow:0 0 0 10px rgba(22,163,74,0)}100%{box-shadow:0 0 0 0 rgba(22,163,74,0)}}
-    .transcript-card{background:var(--card);border:1px solid var(--border);border-radius:16px;box-shadow:var(--shadow);overflow:hidden}
-    .transcript-header{padding:12px 16px;font-weight:700;font-size:.95rem;border-bottom:1px solid var(--border);background:#fafafa}
-    .transcript-body{padding:12px 16px;max-height:320px;overflow:auto}
-    .msg{display:grid;grid-template-columns:86px 1fr;gap:6px 12px;padding:6px 0;align-items:baseline}
-    .msg .who{color:#334155;font-weight:700;text-align:right}
-    .msg .text{white-space:pre-wrap;line-height:1.4;color:#111827}
-    .msg.user .who{color:#0ea5e9}
-    .msg.assistant .who{color:#7c3aed}
-    .muted{color:var(--muted);font-size:.95rem}
-  </style>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Voice Assistant</title>
+    <style>
+        :root {
+            --text: #0f172a;
+            --muted: #6b7280;
+            --accent: #7c3aed;
+            --accent2: #06b6d4;
+            --card: #fff;
+            --border: #e5e7eb;
+            --live: #16a34a;
+            --shadow: 0 10px 30px rgba(0, 0, 0, .08);
+        }
+
+        html,
+        body {
+            margin: 0;
+            background: #fff;
+            color: var(--text);
+            font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif
+        }
+
+        .container {
+            max-width: 760px;
+            margin: 0 auto;
+            padding: 20px 3vw 28px
+        }
+
+        .hero {
+            margin-top: clamp(40px, 20vh, 160px);
+            margin-bottom: 28px
+        }
+
+        .card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 18px;
+            padding: 26px;
+            text-align: center;
+            box-shadow: var(--shadow)
+        }
+
+        h1 {
+            margin: 0 0 8px;
+            font-size: 1.25rem
+        }
+
+        #status {
+            margin: 6px 0 18px;
+            color: var(--muted)
+        }
+
+        button {
+            appearance: none;
+            border: 0;
+            padding: 14px 22px;
+            border-radius: 999px;
+            font-weight: 700;
+            cursor: pointer;
+            color: #fff;
+            background: linear-gradient(135deg, var(--accent), var(--accent2));
+            box-shadow: 0 10px 24px rgba(6, 182, 212, .35);
+            transition: transform .12s, box-shadow .2s, opacity .2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 10px
+        }
+
+        button:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 14px 30px rgba(6, 182, 212, .45)
+        }
+
+        button:disabled {
+            opacity: .65;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none
+        }
+
+        .live button {
+            animation: pulse 1.6s ease-in-out infinite
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                box-shadow: 0 0 0 rgba(124, 58, 237, 0), 0 0 0 rgba(6, 182, 212, 0)
+            }
+
+            50% {
+                box-shadow: 0 0 0 14px rgba(124, 58, 237, .08), 0 0 0 28px rgba(6, 182, 212, .05)
+            }
+        }
+
+        .btn-icon {
+            display: none;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: var(--live);
+            box-shadow: 0 0 0 0 rgba(22, 163, 74, .6)
+        }
+
+        .live #connect .btn-icon {
+            display: inline-block;
+            animation: ping 1.2s cubic-bezier(0, 0, .2, 1) infinite
+        }
+
+        @keyframes ping {
+            0% {
+                box-shadow: 0 0 0 0 rgba(22, 163, 74, .6)
+            }
+
+            70% {
+                box-shadow: 0 0 0 10px rgba(22, 163, 74, 0)
+            }
+
+            100% {
+                box-shadow: 0 0 0 0 rgba(22, 163, 74, 0)
+            }
+        }
+
+        .transcript-card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            box-shadow: var(--shadow);
+            overflow: hidden
+        }
+
+        .transcript-header {
+            padding: 12px 16px;
+            font-weight: 700;
+            font-size: .95rem;
+            border-bottom: 1px solid var(--border);
+            background: #fafafa
+        }
+
+        .transcript-body {
+            padding: 12px 16px;
+            max-height: 320px;
+            overflow: auto
+        }
+
+        .msg {
+            display: grid;
+            grid-template-columns: 86px 1fr;
+            gap: 6px 12px;
+            padding: 6px 0;
+            align-items: baseline
+        }
+
+        .msg .who {
+            color: #334155;
+            font-weight: 700;
+            text-align: right
+        }
+
+        .msg .text {
+            white-space: pre-wrap;
+            line-height: 1.4;
+            color: #111827
+        }
+
+        .msg.user .who {
+            color: #0ea5e9
+        }
+
+        .msg.assistant .who {
+            color: #7c3aed
+        }
+
+        .muted {
+            color: var(--muted);
+            font-size: .95rem
+        }
+    </style>
 </head>
+
 <body>
-  <div class="container">
-    <section class="hero">
-      <div class="card">
-        <h1>Voice Assistant</h1>
-        <p id="status">Click to connect, then start talking.</p>
-        <button id="connect"><span class="btn-icon" aria-hidden="true"></span><span class="btn-label">Connect & Start Talking</span></button>
-        <audio id="remoteAudio" autoplay hidden></audio>
-      </div>
-    </section>
+    <div class="container">
+        <section class="hero">
+            <div class="card">
+                <h1>Voice Assistant</h1>
+                <p id="status">Click to connect, then start talking.</p>
+                <button id="connect"><span class="btn-icon" aria-hidden="true"></span><span class="btn-label">Connect & Start Talking</span></button>
+                <audio id="remoteAudio" autoplay hidden></audio>
+            </div>
+        </section>
 
-    <section class="transcript-card" id="transcript">
-      <div class="transcript-header">Transcript</div>
-      <div class="transcript-body" id="transcriptBody"><div class="muted">No messages yet.</div></div>
-    </section>
-  </div>
+        <section class="transcript-card" id="transcript">
+            <div class="transcript-header">Transcript</div>
+            <div class="transcript-body" id="transcriptBody">
+                <div class="muted">No messages yet.</div>
+            </div>
+        </section>
+    </div>
 
-  <script>
-    // DOM
-    const el = {
-      btn: document.getElementById('connect'),
-      btnLabel: document.querySelector('#connect .btn-label'),
-      status: document.getElementById('status'),
-      audio: document.getElementById('remoteAudio'),
-      transcript: document.getElementById('transcriptBody')
-    };
-
-    // State
-    const S = { pc: null, dc: null, ms: null, connected: false, tearingDown: false };
-
-    // UI helpers
-    const UI = {
-      setStatus: (t) => el.status.textContent = t,
-      setLive: (on) => {
-        document.body.classList.toggle('live', !!on);
-        el.btnLabel.textContent = on ? 'Disconnect' : 'Connect & Start Talking';
-      },
-      atBottom: (c) => c.scrollHeight - c.clientHeight - c.scrollTop < 24,
-      stick: (c) => { c.scrollTop = c.scrollHeight; },
-      ensureNotEmpty: () => {
-        const first = el.transcript.firstElementChild;
-        if (first && first.classList.contains('muted')) first.remove();
-      },
-      addMsgNode: (role, text = '') => {
-        UI.ensureNotEmpty();
-        const wrap = document.createElement('div');
-        wrap.className = `msg ${role}`;
-        const who = document.createElement('div');
-        who.className = 'who';
-        who.textContent = role === 'assistant' ? 'Assistant' : role === 'user' ? 'You' : 'System';
-        const msg = document.createElement('div');
-        msg.className = 'text';
-        msg.textContent = text;
-        wrap.append(who, msg);
-        const stick = UI.atBottom(el.transcript);
-        el.transcript.appendChild(wrap);
-        if (stick) UI.stick(el.transcript);
-        return msg;
-      }
-    };
-
-    // Transcript manager (sequential by relying on conversation.item.created)
-    const T = (() => {
-      const items = new Map();       // itemId -> { role, msgEl, buffer }
-      const pending = new Map();     // itemId -> buffered text when node not yet created
-
-      const textFromContent = (content) => {
-        if (!Array.isArray(content)) return '';
-        for (const p of content) {
-          if ((p.type === 'input_text' || p.type === 'output_text') && p.text) return p.text;
-          if (p.type === 'audio' && p.transcript) return p.transcript;
-        }
-        return '';
-      };
-
-      const ensure = (id, role, initial = '') => {
-        if (items.has(id)) return items.get(id);
-        const msgEl = UI.addMsgNode(role, initial);
-        const rec = { role, msgEl, buffer: initial || '' };
-        items.set(id, rec);
-        if (pending.has(id)) {
-          rec.buffer += pending.get(id);
-          rec.msgEl.textContent = rec.buffer;
-          pending.delete(id);
-        }
-        return rec;
-      };
-
-      const append = (id, delta) => {
-        if (!id || !delta) return;
-        const rec = items.get(id);
-        if (!rec) return pending.set(id, (pending.get(id) || '') + delta);
-        const stick = UI.atBottom(el.transcript);
-        rec.buffer += delta;
-        rec.msgEl.textContent = rec.buffer;
-        if (stick) UI.stick(el.transcript);
-      };
-
-      const finalize = (id, text) => {
-        const rec = items.get(id);
-        if (!rec) return pending.set(id, text || pending.get(id) || '');
-        if (text && text !== rec.buffer) {
-          const stick = UI.atBottom(el.transcript);
-          rec.buffer = text;
-          rec.msgEl.textContent = rec.buffer;
-          if (stick) UI.stick(el.transcript);
-        }
-        pending.delete(id);
-      };
-
-      return { items, textFromContent, ensure, append, finalize };
-    })();
-
-    // Handle realtime events (minimal, no noisy logs)
-    function onEvent(evt) {
-      if (!evt || !evt.type) return;
-
-      if (evt.type === 'error') {
-        UI.setStatus(`Error: ${evt.error?.message || 'Realtime error'}`);
-        return;
-      }
-
-      // Sequential ordering: add nodes only when items are created
-      if (evt.type === 'conversation.item.created') {
-        const it = evt.item;
-        if (it?.type === 'message' && (it.role === 'user' || it.role === 'assistant')) {
-          T.ensure(it.id, it.role, T.textFromContent(it.content));
-        }
-        return;
-      }
-
-      // User speech transcription
-      if (evt.type === 'conversation.item.input_audio_transcription.delta') {
-        T.append(evt.item_id, evt.delta || ''); return;
-      }
-      if (evt.type === 'conversation.item.input_audio_transcription.completed') {
-        T.finalize(evt.item_id, evt.transcript || ''); return;
-      }
-
-      // Assistant speech transcript (audio output)
-      if (evt.type === 'response.audio_transcript.delta') {
-        T.append(evt.item_id, evt.delta || ''); return;
-      }
-      if (evt.type === 'response.audio_transcript.done') {
-        T.finalize(evt.item_id, evt.transcript || ''); return;
-      }
-
-      // Fallback: response.done may include final assistant content
-      if (evt.type === 'response.done') {
-        const out = evt.response?.output;
-        if (Array.isArray(out)) {
-          for (const it of out) {
-            if (it.type === 'message' && it.role === 'assistant') {
-              T.finalize(it.id, T.textFromContent(it.content));
-            }
-          }
-        }
-      }
-    }
-
-    // WebRTC helpers
-    function stopTracks(s) { try { s.getTracks().forEach(t => t.stop()); } catch {} }
-    function closeSafe(x) { try { x && x.close && x.close(); } catch {} }
-
-    async function startCall() {
-      try {
-        el.btn.disabled = true;
-        UI.setStatus('Requesting session...');
-        const { client_secret, model } = await fetch('/session').then(r => r.json());
-        const EPHEMERAL = client_secret.value;
-        const MODEL = model;
-
-        UI.setStatus('Preparing audio...');
-        S.pc = new RTCPeerConnection();
-
-        S.pc.oniceconnectionstatechange = () => {
-          const st = S.pc.iceConnectionState;
-          if (st === 'connected') {
-            S.connected = true;
-            UI.setStatus('Connected — speak now');
-            UI.setLive(true);
-            el.btn.disabled = false;
-          } else if (['disconnected','failed','closed'].includes(st)) {
-            teardown('Call ended');
-          }
+    <script>
+        // DOM
+        const el = {
+            btn: document.getElementById('connect'),
+            btnLabel: document.querySelector('#connect .btn-label'),
+            status: document.getElementById('status'),
+            audio: document.getElementById('remoteAudio'),
+            transcript: document.getElementById('transcriptBody')
         };
 
-        S.pc.ontrack = (e) => { el.audio.srcObject = e.streams[0]; el.audio.hidden = false; };
-
-        S.ms = await navigator.mediaDevices.getUserMedia({ audio: true });
-        S.ms.getTracks().forEach(t => S.pc.addTrack(t, S.ms));
-
-        S.dc = S.pc.createDataChannel('oai-events');
-        S.dc.onmessage = (e) => { try { onEvent(JSON.parse(e.data)); } catch {} };
-        S.dc.onopen = () => {
-          // Configure session
-          S.dc.send(JSON.stringify({
-            type: 'session.update',
-            session: {
-              instructions: 'You are a friendly voice assistant. Keep replies short.',
-              voice: 'verse',
-              turn_detection: { type: 'server_vad', silence_duration_ms: 400 },
-              input_audio_transcription: { model: 'gpt-4o-mini-transcribe' }
-            }
-          }));
-          // Initial user "message" (valid input type)
-          S.dc.send(JSON.stringify({
-            type: 'response.create',
-            response: {
-              modalities: ['audio','text'],
-              conversation: 'auto',
-              input: [{
-                type: 'message',
-                role: 'user',
-                content: [{ type: 'input_text', text: 'Say hello and tell me one thing you can help with.' }]
-              }]
-            }
-          }));
+        // State
+        const S = {
+            pc: null,
+            dc: null,
+            ms: null,
+            connected: false,
+            tearingDown: false
         };
-        S.dc.onclose = () => { if (S.connected) teardown('Peer closed'); };
-        S.dc.onerror = () => { if (S.connected) teardown('Data channel error'); };
 
-        UI.setStatus('Connecting…');
-        const offer = await S.pc.createOffer();
-        await S.pc.setLocalDescription(offer);
+        // UI helpers
+        const UI = {
+            setStatus: (t) => el.status.textContent = t,
+            setLive: (on) => {
+                document.body.classList.toggle('live', !!on);
+                el.btnLabel.textContent = on ? 'Disconnect' : 'Connect & Start Talking';
+            },
+            atBottom: (c) => c.scrollHeight - c.clientHeight - c.scrollTop < 24,
+            stick: (c) => {
+                c.scrollTop = c.scrollHeight;
+            },
+            ensureNotEmpty: () => {
+                const first = el.transcript.firstElementChild;
+                if (first && first.classList.contains('muted')) first.remove();
+            },
+            addMsgNode: (role, text = '') => {
+                UI.ensureNotEmpty();
+                const wrap = document.createElement('div');
+                wrap.className = `msg ${role}`;
+                const who = document.createElement('div');
+                who.className = 'who';
+                who.textContent = role === 'assistant' ? 'Assistant' : role === 'user' ? 'You' : 'System';
+                const msg = document.createElement('div');
+                msg.className = 'text';
+                msg.textContent = text;
+                wrap.append(who, msg);
+                const stick = UI.atBottom(el.transcript);
+                el.transcript.appendChild(wrap);
+                if (stick) UI.stick(el.transcript);
+                return msg;
+            }
+        };
 
-        const sdpAnswer = await fetch(`https://api.openai.com/v1/realtime?model=${MODEL}`, {
-          method: 'POST',
-          body: offer.sdp,
-          headers: { Authorization: `Bearer ${EPHEMERAL}`, 'Content-Type': 'application/sdp', 'OpenAI-Beta': 'realtime=v1' }
-        }).then(r => r.text());
+        // Transcript manager (sequential by relying on conversation.item.created)
+        const T = (() => {
+            const items = new Map(); // itemId -> { role, msgEl, buffer }
+            const pending = new Map(); // itemId -> buffered text when node not yet created
 
-        await S.pc.setRemoteDescription({ type: 'answer', sdp: sdpAnswer });
-        el.btn.disabled = false;
-      } catch (err) {
-        UI.setStatus('Something went wrong. Check console.');
-        console.error(err);
-        UI.setLive(false);
-        el.btn.disabled = false;
-        S.connected = false;
-      }
-    }
+            const textFromContent = (content) => {
+                if (!Array.isArray(content)) return '';
+                for (const p of content) {
+                    if ((p.type === 'input_text' || p.type === 'output_text') && p.text) return p.text;
+                    if (p.type === 'audio' && p.transcript) return p.transcript;
+                }
+                return '';
+            };
 
-    function teardown(message = 'Disconnected') {
-      if (S.tearingDown) return;
-      S.tearingDown = true;
-      try {
-        UI.setStatus(message);
-        closeSafe(S.dc); S.dc = null;
-        if (S.pc) {
-          try {
-            S.pc.getSenders().forEach(s => s.track && s.track.stop());
-            S.pc.getReceivers().forEach(r => r.track && r.track.stop && r.track.stop());
-            S.pc.getTransceivers().forEach(t => t.stop && t.stop());
-          } catch {}
-          closeSafe(S.pc); S.pc = null;
+            const ensure = (id, role, initial = '') => {
+                if (items.has(id)) return items.get(id);
+                const msgEl = UI.addMsgNode(role, initial);
+                const rec = {
+                    role,
+                    msgEl,
+                    buffer: initial || ''
+                };
+                items.set(id, rec);
+                if (pending.has(id)) {
+                    rec.buffer += pending.get(id);
+                    rec.msgEl.textContent = rec.buffer;
+                    pending.delete(id);
+                }
+                return rec;
+            };
+
+            const append = (id, delta) => {
+                if (!id || !delta) return;
+                const rec = items.get(id);
+                if (!rec) return pending.set(id, (pending.get(id) || '') + delta);
+                const stick = UI.atBottom(el.transcript);
+                rec.buffer += delta;
+                rec.msgEl.textContent = rec.buffer;
+                if (stick) UI.stick(el.transcript);
+            };
+
+            const finalize = (id, text) => {
+                const rec = items.get(id);
+                if (!rec) return pending.set(id, text || pending.get(id) || '');
+                if (text && text !== rec.buffer) {
+                    const stick = UI.atBottom(el.transcript);
+                    rec.buffer = text;
+                    rec.msgEl.textContent = rec.buffer;
+                    if (stick) UI.stick(el.transcript);
+                }
+                pending.delete(id);
+            };
+
+            return {
+                items,
+                textFromContent,
+                ensure,
+                append,
+                finalize
+            };
+        })();
+
+        // Handle realtime events (minimal, no noisy logs)
+        function onEvent(evt) {
+            if (!evt || !evt.type) return;
+
+            if (evt.type === 'error') {
+                UI.setStatus(`Error: ${evt.error?.message || 'Realtime error'}`);
+                return;
+            }
+
+            // Sequential ordering: add nodes only when items are created
+            if (evt.type === 'conversation.item.created') {
+                const it = evt.item;
+                if (it?.type === 'message' && (it.role === 'user' || it.role === 'assistant')) {
+                    T.ensure(it.id, it.role, T.textFromContent(it.content));
+                }
+                return;
+            }
+
+            // User speech transcription
+            if (evt.type === 'conversation.item.input_audio_transcription.delta') {
+                T.append(evt.item_id, evt.delta || '');
+                return;
+            }
+            if (evt.type === 'conversation.item.input_audio_transcription.completed') {
+                T.finalize(evt.item_id, evt.transcript || '');
+                return;
+            }
+
+            // Assistant speech transcript (audio output)
+            if (evt.type === 'response.audio_transcript.delta') {
+                T.append(evt.item_id, evt.delta || '');
+                return;
+            }
+            if (evt.type === 'response.audio_transcript.done') {
+                T.finalize(evt.item_id, evt.transcript || '');
+                return;
+            }
+
+            // Fallback: response.done may include final assistant content
+            if (evt.type === 'response.done') {
+                const out = evt.response?.output;
+                if (Array.isArray(out)) {
+                    for (const it of out) {
+                        if (it.type === 'message' && it.role === 'assistant') {
+                            T.finalize(it.id, T.textFromContent(it.content));
+                        }
+                    }
+                }
+            }
         }
-        if (S.ms) { stopTracks(S.ms); S.ms = null; }
-        if (el.audio.srcObject) { stopTracks(el.audio.srcObject); el.audio.srcObject = null; }
-        el.audio.hidden = true;
-      } finally {
-        S.connected = false;
-        UI.setLive(false);
-        el.btn.disabled = false;
-        S.tearingDown = false;
-      }
-    }
 
-    // Button toggle
-    el.btn.onclick = async () => S.connected ? teardown('Disconnected') : startCall();
-  </script>
+        // WebRTC helpers
+        function stopTracks(s) {
+            try {
+                s.getTracks().forEach(t => t.stop());
+            } catch {}
+        }
+
+        function closeSafe(x) {
+            try {
+                x && x.close && x.close();
+            } catch {}
+        }
+
+        async function startCall() {
+            try {
+                el.btn.disabled = true;
+                UI.setStatus('Requesting session...');
+                const {
+                    client_secret,
+                    model
+                } = await fetch('/session').then(r => r.json());
+                const EPHEMERAL = client_secret.value;
+                const MODEL = model;
+
+                UI.setStatus('Preparing audio...');
+                S.pc = new RTCPeerConnection();
+
+                S.pc.oniceconnectionstatechange = () => {
+                    const st = S.pc.iceConnectionState;
+                    if (st === 'connected') {
+                        S.connected = true;
+                        UI.setStatus('Connected — speak now');
+                        UI.setLive(true);
+                        el.btn.disabled = false;
+                    } else if (['disconnected', 'failed', 'closed'].includes(st)) {
+                        teardown('Call ended');
+                    }
+                };
+
+                S.pc.ontrack = (e) => {
+                    el.audio.srcObject = e.streams[0];
+                    el.audio.hidden = false;
+                };
+
+                S.ms = await navigator.mediaDevices.getUserMedia({
+                    audio: true
+                });
+                S.ms.getTracks().forEach(t => S.pc.addTrack(t, S.ms));
+
+                S.dc = S.pc.createDataChannel('oai-events');
+                S.dc.onmessage = (e) => {
+                    try {
+                        onEvent(JSON.parse(e.data));
+                    } catch {}
+                };
+                S.dc.onopen = () => {
+                    // Configure session
+                    S.dc.send(JSON.stringify({
+                        type: 'session.update',
+                        session: {
+                            instructions: 'You are a friendly voice assistant. Keep replies short.',
+                            voice: 'verse',
+                            turn_detection: {
+                                type: 'server_vad',
+                                silence_duration_ms: 400
+                            },
+                            input_audio_transcription: {
+                                model: 'gpt-4o-mini-transcribe'
+                            }
+                        }
+                    }));
+                    // Initial user "message" (valid input type)
+                    S.dc.send(JSON.stringify({
+                        type: 'response.create',
+                        response: {
+                            modalities: ['audio', 'text'],
+                            conversation: 'auto',
+                            input: [{
+                                type: 'message',
+                                role: 'user',
+                                content: [{
+                                    type: 'input_text',
+                                    text: 'Say hello and tell me one thing you can help with.'
+                                }]
+                            }]
+                        }
+                    }));
+                };
+                S.dc.onclose = () => {
+                    if (S.connected) teardown('Peer closed');
+                };
+                S.dc.onerror = () => {
+                    if (S.connected) teardown('Data channel error');
+                };
+
+                UI.setStatus('Connecting…');
+                const offer = await S.pc.createOffer();
+                await S.pc.setLocalDescription(offer);
+
+                const sdpAnswer = await fetch(`https://api.openai.com/v1/realtime?model=${MODEL}`, {
+                    method: 'POST',
+                    body: offer.sdp,
+                    headers: {
+                        Authorization: `Bearer ${EPHEMERAL}`,
+                        'Content-Type': 'application/sdp',
+                        'OpenAI-Beta': 'realtime=v1'
+                    }
+                }).then(r => r.text());
+
+                await S.pc.setRemoteDescription({
+                    type: 'answer',
+                    sdp: sdpAnswer
+                });
+                el.btn.disabled = false;
+            } catch (err) {
+                UI.setStatus('Something went wrong. Check console.');
+                console.error(err);
+                UI.setLive(false);
+                el.btn.disabled = false;
+                S.connected = false;
+            }
+        }
+
+        function teardown(message = 'Disconnected') {
+            if (S.tearingDown) return;
+            S.tearingDown = true;
+            try {
+                UI.setStatus(message);
+                closeSafe(S.dc);
+                S.dc = null;
+                if (S.pc) {
+                    try {
+                        S.pc.getSenders().forEach(s => s.track && s.track.stop());
+                        S.pc.getReceivers().forEach(r => r.track && r.track.stop && r.track.stop());
+                        S.pc.getTransceivers().forEach(t => t.stop && t.stop());
+                    } catch {}
+                    closeSafe(S.pc);
+                    S.pc = null;
+                }
+                if (S.ms) {
+                    stopTracks(S.ms);
+                    S.ms = null;
+                }
+                if (el.audio.srcObject) {
+                    stopTracks(el.audio.srcObject);
+                    el.audio.srcObject = null;
+                }
+                el.audio.hidden = true;
+            } finally {
+                S.connected = false;
+                UI.setLive(false);
+                el.btn.disabled = false;
+                S.tearingDown = false;
+            }
+        }
+
+        // Button toggle
+        el.btn.onclick = async () => S.connected ? teardown('Disconnected') : startCall();
+    </script>
 </body>
+
 </html>
