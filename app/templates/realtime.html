@@ -209,7 +209,7 @@
       try {
         el.btn.disabled = true;
         UI.setStatus('Requesting session...');
-        const { client_secret, model } = await fetch('https://webservices.internal.dasos.uk/ai/session').then(r => r.json());
+        const { client_secret, model } = await fetch('/session').then(r => r.json());
         const EPHEMERAL = client_secret.value;
         const MODEL = model;
 
