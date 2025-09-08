@@ -23,5 +23,8 @@ COPY . .
 # Expose app port
 EXPOSE 8000
 
+# Enable verbose Gunicorn logging via env var
+ENV GUNICORN_CMD_ARGS="--log-level debug"
+
 # Default to gunicorn WSGI server
 CMD ["gunicorn", "wsgi:app", "--bind", "0.0.0.0:8000", "--workers", "2", "--threads", "4", "--timeout", "120"]
