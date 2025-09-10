@@ -5,7 +5,14 @@
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>Voice Assistant</title>
+    <meta name="theme-color" content="#7c3aed" />
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="manifest" href="/manifest.json">
+    <link rel="apple-touch-icon" href="/icons/icon-192x192.png">
+    <link rel="icon" sizes="192x192" href="/icons/icon-192x192.png">
+    <link rel="icon" sizes="512x512" href="/icons/icon-512x512.png">
+    <title>Chirp Voice Assistant</title>
     <style>
         :root {
             --text: #0f172a;
@@ -189,7 +196,7 @@
     <div class="container">
         <section class="hero">
             <div class="card">
-                <h1>Voice Assistant</h1>
+                <h1>Chirp</h1>
                 <p id="status">Click to connect, then start talking.</p>
                 <button id="connect"><span class="btn-icon" aria-hidden="true"></span><span class="btn-label">Connect & Start Talking</span></button>
                 <audio id="remoteAudio" autoplay hidden></audio>
@@ -527,6 +534,14 @@
 
         // Button toggle
         el.btn.onclick = async () => S.connected ? teardown('Disconnected') : startCall();
+    </script>
+    <script>
+        // Register service worker for PWA capabilities
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/service-worker.js').catch(() => { /* noop */ });
+            });
+        }
     </script>
 </body>
 
