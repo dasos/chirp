@@ -41,9 +41,9 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
           tags: |
-            ${{ steps.meta.outputs.tags }}
-            dasos/chirp:latest
+            ${{ steps.meta.outputs.tags }},${{ github.repository_split[1] }}:latest
           labels: ${{ steps.meta.outputs.labels }}
+
 
 
 
