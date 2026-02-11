@@ -28,6 +28,11 @@ If Gradle wrapper JAR is missing, generate it from a terminal:
 ```bash
 ./gradlew wrapper
 ```
+If the wrapper JAR is missing and `./gradlew` cannot run, generate it once with a local
+Gradle 8.6 install:
+```bash
+gradle wrapper --gradle-version 8.6
+```
 
 ## Run
 - Phone app: choose `app` run configuration.
