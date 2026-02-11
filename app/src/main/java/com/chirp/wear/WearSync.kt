@@ -1,9 +1,12 @@
 package com.chirp.wear
 
 import android.content.Context
+import android.util.Log
 import com.chirp.data.TranscriptRepository
 import com.chirp.realtime.SessionState
 import com.chirp.realtime.VoiceSessionController
+import com.google.android.gms.common.api.ApiException
+import com.google.android.gms.common.api.CommonStatusCodes
 import com.google.android.gms.wearable.Wearable
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -21,6 +24,9 @@ class WearSync(
     private val sessionController: VoiceSessionController,
     private val transcriptRepository: TranscriptRepository,
 ) {
+    private companion object {
+        private const val TAG = "WearSync"
+    }
     fun start() {
         scope.launch {
             sessionController.state.collectLatest { state ->
@@ -55,12 +61,39 @@ class WearSync(
     }
 
     private suspend fun sendMessage(path: String, data: ByteArray) {
-        val nodes = withContext(Dispatchers.IO) {
-            Wearable.getNodeClient(context).connectedNodes.await()
+        val nodes = try {
+            withContext(Dispatchers.IO) {
+                Wearable.getNodeClient(context).connectedNodes.await()
+            }
+        } catch (e: ApiException) {
+            if (e.statusCode == CommonStatusCodes.API_NOT_CONNECTED ||
+                e.statusCode == CommonStatusCodes.API_UNAVAILABLE
+            ) {
+                Log.i(TAG, "Wearable API unavailable on this device.")
+                return
+            }
+            Log.w(TAG, "Wearable node lookup failed.", e)
+            return
+        } catch (e: Exception) {
+            Log.w(TAG, "Wearable node lookup failed.", e)
+            return
         }
+
         val client = Wearable.getMessageClient(context)
         for (node in nodes) {
-            client.sendMessage(node.id, path, data).await()
+            try {
+                client.sendMessage(node.id, path, data).await()
+            } catch (e: ApiException) {
+                if (e.statusCode == CommonStatusCodes.API_NOT_CONNECTED ||
+                    e.statusCode == CommonStatusCodes.API_UNAVAILABLE
+                ) {
+                    Log.i(TAG, "Wearable API unavailable on this device.")
+                    return
+                }
+                Log.w(TAG, "Wearable send failed.", e)
+            } catch (e: Exception) {
+                Log.w(TAG, "Wearable send failed.", e)
+            }
         }
     }
 }
