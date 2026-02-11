@@ -376,7 +376,7 @@ private fun ApiKeySheet(
             Text("OpenAI API Key", style = MaterialTheme.typography.titleMedium)
             Spacer(modifier = Modifier.height(12.dp))
             Text(
-                "Your key is stored locally on this device. OpenAI discourages using API keys in client apps.",
+                "Your key is stored locally on this device.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
