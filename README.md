@@ -4,7 +4,6 @@ Chirp is a **native** Android phone app with a **Wear OS companion** that connec
 
 ## Key Notes (Security)
 - This app **prompts for an OpenAI API key** and stores it **locally** using encrypted storage.
-- OpenAI discourages using API keys inside client apps. This is a trade-off you requested.
 - Use a key you control and rotate it if you suspect compromise.
 
 ## Requirements
