@@ -5,6 +5,7 @@ import android.util.Log
 import com.chirp.data.TranscriptRepository
 import com.chirp.realtime.SessionState
 import com.chirp.realtime.VoiceSessionController
+import com.google.android.gms.common.ConnectionResult
 import com.google.android.gms.common.api.ApiException
 import com.google.android.gms.common.api.CommonStatusCodes
 import com.google.android.gms.wearable.Wearable
@@ -67,7 +68,7 @@ class WearSync(
             }
         } catch (e: ApiException) {
             if (e.statusCode == CommonStatusCodes.API_NOT_CONNECTED ||
-                e.statusCode == CommonStatusCodes.API_UNAVAILABLE
+                e.statusCode == ConnectionResult.API_UNAVAILABLE
             ) {
                 Log.i(TAG, "Wearable API unavailable on this device.")
                 return
@@ -85,7 +86,7 @@ class WearSync(
                 client.sendMessage(node.id, path, data).await()
             } catch (e: ApiException) {
                 if (e.statusCode == CommonStatusCodes.API_NOT_CONNECTED ||
-                    e.statusCode == CommonStatusCodes.API_UNAVAILABLE
+                    e.statusCode == ConnectionResult.API_UNAVAILABLE
                 ) {
                     Log.i(TAG, "Wearable API unavailable on this device.")
                     return
