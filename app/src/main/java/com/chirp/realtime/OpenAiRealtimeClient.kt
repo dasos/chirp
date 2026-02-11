@@ -14,7 +14,7 @@ import org.webrtc.AudioSource
 import org.webrtc.AudioTrack
 import org.webrtc.DataChannel
 import org.webrtc.IceCandidate
-import org.webrtc.JavaAudioDeviceModule
+import org.webrtc.audio.JavaAudioDeviceModule
 import org.webrtc.MediaConstraints
 import org.webrtc.MediaStream
 import org.webrtc.PeerConnection
@@ -232,6 +232,8 @@ class OpenAiRealtimeClient(
                 override fun onIceCandidatesRemoved(candidates: Array<IceCandidate>) = Unit
 
                 override fun onAddStream(stream: MediaStream) = Unit
+
+                override fun onIceConnectionReceivingChange(receiving: Boolean) = Unit
 
                 override fun onRemoveStream(stream: MediaStream) = Unit
 
