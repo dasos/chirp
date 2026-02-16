@@ -35,8 +35,7 @@ class WearSync(
             }
         }
         scope.launch {
-            transcriptRepository.streamAll()
-                .map { it.lastOrNull() }
+            transcriptRepository.streamLatest()
                 .distinctUntilChangedBy { it?.text }
                 .collectLatest { item ->
                     if (item != null) {

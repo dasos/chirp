@@ -1,6 +1,7 @@
 package com.chirp.realtime
 
 import android.content.Context
+import android.util.Log
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -35,6 +36,9 @@ class OpenAiRealtimeClient(
     private val apiKeyStore: com.chirp.data.ApiKeyStore,
     private val transcriptStore: TranscriptStore,
 ) {
+    private companion object {
+        private const val TAG = "OpenAiRealtimeClient"
+    }
     private var peerConnectionFactory: PeerConnectionFactory? = null
     private var peerConnection: PeerConnection? = null
     private var dataChannel: DataChannel? = null
@@ -94,7 +98,7 @@ class OpenAiRealtimeClient(
             setLocalDescription(pc, offer)
             awaitIceGathering(pc)
 
-            val sdpAnswer = exchangeSdp(sessionInfo.clientSecret, sessionInfo.model, offer.description)
+            val sdpAnswer = exchangeSdp(sessionInfo.clientSecret, offer.description)
             setRemoteDescription(pc, SessionDescription(SessionDescription.Type.ANSWER, sdpAnswer))
 
             onStatus(SessionState(SessionStatus.CONNECTED, "Connected — speak now", true))
@@ -128,22 +132,14 @@ class OpenAiRealtimeClient(
     private suspend fun createSession(apiKey: String, config: SessionConfig): SessionInfo {
         return withContext(Dispatchers.IO) {
             val payload = JSONObject().apply {
-                put("model", config.model)
-                put("voice", config.voice)
-                val modalities = if (config.transcribe) {
-                    JSONArray().put("text").put("audio")
-                } else {
-                    JSONArray().put("audio")
-                }
-                put("modalities", modalities)
+                put("session", buildSessionConfig(config))
             }
 
             val body = payload.toString().toRequestBody("application/json".toMediaType())
             val request = Request.Builder()
-                .url("https://api.openai.com/v1/realtime/sessions")
+                .url("https://api.openai.com/v1/realtime/client_secrets")
                 .addHeader("Authorization", "Bearer $apiKey")
                 .addHeader("Content-Type", "application/json")
-                .addHeader("OpenAI-Beta", "realtime=v1")
                 .post(body)
                 .build()
 
@@ -153,20 +149,18 @@ class OpenAiRealtimeClient(
                     throw IllegalStateException("Session error ${response.code}: $raw")
                 }
                 val json = JSONObject(raw)
-                val clientSecret = json.getJSONObject("client_secret").getString("value")
-                val model = json.optString("model", config.model)
-                SessionInfo(clientSecret, model)
+                val clientSecret = json.getString("value")
+                SessionInfo(clientSecret)
             }
         }
     }
 
-    private suspend fun exchangeSdp(ephemeralKey: String, model: String, offerSdp: String): String {
+    private suspend fun exchangeSdp(ephemeralKey: String, offerSdp: String): String {
         return withContext(Dispatchers.IO) {
             val request = Request.Builder()
-                .url("https://api.openai.com/v1/realtime?model=$model")
+                .url("https://api.openai.com/v1/realtime/calls")
                 .addHeader("Authorization", "Bearer $ephemeralKey")
                 .addHeader("Content-Type", "application/sdp")
-                .addHeader("OpenAI-Beta", "realtime=v1")
                 .post(offerSdp.toRequestBody("application/sdp".toMediaType()))
                 .build()
 
@@ -303,30 +297,11 @@ class OpenAiRealtimeClient(
     private fun sendSessionUpdate(config: SessionConfig) {
         val payload = JSONObject().apply {
             put("type", "session.update")
-            put("session", JSONObject().apply {
-                put("input_audio_format", if (config.lowBandwidth) "g711_ulaw" else "pcm16")
-                put("output_audio_format", if (config.lowBandwidth) "g711_ulaw" else "pcm16")
-                put("max_output_tokens", config.maxOutputTokens)
-                put(
-                    "output_modalities",
-                    if (config.transcribe) JSONArray().put("audio").put("text") else JSONArray().put("audio"),
-                )
-                put("instructions", "You are a friendly voice assistant. Keep replies concise.")
-                put("voice", config.voice)
-                put("turn_detection", JSONObject().apply {
-                    put("type", "server_vad")
-                    put("silence_duration_ms", 400)
-                })
-                if (config.transcribe) {
-                    put("input_audio_transcription", JSONObject().apply {
-                        put("model", "gpt-4o-mini-transcribe")
-                    })
-                } else {
-                    put("input_audio_transcription", JSONObject.NULL)
-                }
-            })
+            put("session", buildSessionConfig(config))
         }
-        val bytes = payload.toString().toByteArray(StandardCharsets.UTF_8)
+        val payloadText = payload.toString()
+        Log.i(TAG, "Sending session.update: $payloadText")
+        val bytes = payloadText.toByteArray(StandardCharsets.UTF_8)
         dataChannel?.send(DataChannel.Buffer(ByteBuffer.wrap(bytes), false))
     }
 
@@ -337,6 +312,7 @@ class OpenAiRealtimeClient(
             when (type) {
                 "error" -> {
                     val error = json.optJSONObject("error")
+                    Log.e(TAG, "Realtime error event: ${error?.toString() ?: json.toString()}")
                     onStatus(
                         SessionState(
                             SessionStatus.ERROR,
@@ -345,7 +321,9 @@ class OpenAiRealtimeClient(
                         ),
                     )
                 }
-                "conversation.item.created" -> {
+                "conversation.item.created",
+                "conversation.item.added",
+                "conversation.item.done" -> {
                     val item = json.optJSONObject("item") ?: return
                     if (item.optString("type") == "message") {
                         val role = item.optString("role")
@@ -365,12 +343,14 @@ class OpenAiRealtimeClient(
                     val transcript = json.optString("transcript")
                     safeTranscript { transcriptStore.finalize(itemId, transcript) }
                 }
-                "response.audio_transcript.delta" -> {
+                "response.audio_transcript.delta",
+                "response.output_audio_transcript.delta" -> {
                     val itemId = json.optString("item_id")
                     val delta = json.optString("delta")
                     safeTranscript { transcriptStore.append(itemId, delta) }
                 }
-                "response.audio_transcript.done" -> {
+                "response.audio_transcript.done",
+                "response.output_audio_transcript.done" -> {
                     val itemId = json.optString("item_id")
                     val transcript = json.optString("transcript")
                     safeTranscript { transcriptStore.finalize(itemId, transcript) }
@@ -400,11 +380,50 @@ class OpenAiRealtimeClient(
             if ((type == "input_text" || type == "output_text") && part.has("text")) {
                 return part.optString("text")
             }
-            if (type == "audio" && part.has("transcript")) {
+            if ((type == "audio" || type == "output_audio") && part.has("transcript")) {
                 return part.optString("transcript")
             }
         }
         return ""
+    }
+
+    private fun buildSessionConfig(config: SessionConfig): JSONObject {
+        return JSONObject().apply {
+            put("type", "realtime")
+            put("model", config.model)
+            put("max_output_tokens", config.maxOutputTokens)
+            // Realtime only supports either audio or text output, not both.
+            put("output_modalities", JSONArray().put("audio"))
+            put("instructions", "You are a friendly voice assistant. Keep replies concise.")
+            put("audio", JSONObject().apply {
+                put("input", JSONObject().apply {
+                    put("format", buildAudioFormat(config.lowBandwidth))
+                    put("turn_detection", JSONObject().apply {
+                        put("type", "server_vad")
+                        put("silence_duration_ms", 400)
+                    })
+                    if (config.transcribe) {
+                        put("transcription", JSONObject().apply {
+                            put("model", "gpt-4o-mini-transcribe")
+                        })
+                    } else {
+                        put("transcription", JSONObject.NULL)
+                    }
+                })
+                put("output", JSONObject().apply {
+                    put("format", buildAudioFormat(config.lowBandwidth))
+                    put("voice", config.voice)
+                })
+            })
+        }
+    }
+
+    private fun buildAudioFormat(lowBandwidth: Boolean): JSONObject {
+        return if (lowBandwidth) {
+            JSONObject().put("type", "audio/pcmu")
+        } else {
+            JSONObject().put("type", "audio/pcm").put("rate", 24000)
+        }
     }
 
     private fun safeTranscript(block: suspend () -> Unit) {
@@ -419,7 +438,6 @@ class OpenAiRealtimeClient(
 
     private data class SessionInfo(
         val clientSecret: String,
-        val model: String,
     )
 }
 

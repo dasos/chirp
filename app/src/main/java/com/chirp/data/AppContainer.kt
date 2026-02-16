@@ -18,7 +18,8 @@ class AppContainer(context: Context) {
     val settingsStore = SettingsStore(appContext)
     val transcriptDatabase = TranscriptDatabase.getInstance(appContext)
     val transcriptRepository = TranscriptRepository(transcriptDatabase.transcriptDao())
-    val transcriptStore = TranscriptStore(transcriptRepository)
+    val sessionRepository = SessionRepository(transcriptDatabase.sessionDao())
+    val transcriptStore = TranscriptStore(transcriptRepository, sessionRepository)
 
     private val httpClient = OkHttpClient.Builder().build()
 

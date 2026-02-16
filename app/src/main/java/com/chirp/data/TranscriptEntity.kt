@@ -6,6 +6,7 @@ import androidx.room.PrimaryKey
 @Entity(tableName = "transcripts")
 data class TranscriptEntity(
     @PrimaryKey val itemId: String,
+    val sessionId: String,
     val role: String,
     val text: String,
     val createdAt: Long,

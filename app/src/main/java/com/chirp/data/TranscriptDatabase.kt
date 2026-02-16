@@ -5,9 +5,10 @@ import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
 
-@Database(entities = [TranscriptEntity::class], version = 1, exportSchema = false)
+@Database(entities = [TranscriptEntity::class, SessionEntity::class], version = 2, exportSchema = false)
 abstract class TranscriptDatabase : RoomDatabase() {
     abstract fun transcriptDao(): TranscriptDao
+    abstract fun sessionDao(): SessionDao
 
     companion object {
         @Volatile
@@ -19,7 +20,10 @@ abstract class TranscriptDatabase : RoomDatabase() {
                     context.applicationContext,
                     TranscriptDatabase::class.java,
                     "chirp_transcripts.db",
-                ).build().also { instance = it }
+                )
+                    .fallbackToDestructiveMigration()
+                    .build()
+                    .also { instance = it }
             }
         }
     }

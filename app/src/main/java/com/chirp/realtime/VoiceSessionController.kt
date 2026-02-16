@@ -23,6 +23,7 @@ class VoiceSessionController(
             maxOutputTokens = settings.maxOutputTokens,
         )
         scope.launch {
+            transcriptStore.startSession()
             _state.value = SessionState(SessionStatus.CONNECTING, "Requesting session…", false)
             realtimeClient.start(config) { state ->
                 _state.value = state
@@ -50,5 +51,9 @@ class VoiceSessionController(
 
     fun deleteTranscript(itemId: String) {
         scope.launch { transcriptStore.delete(itemId) }
+    }
+
+    fun deleteSession(sessionId: String) {
+        scope.launch { transcriptStore.deleteSession(sessionId) }
     }
 }

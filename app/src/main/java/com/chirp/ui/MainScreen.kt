@@ -1,6 +1,7 @@
 package com.chirp.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -55,9 +56,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.chirp.data.SessionEntity
 import com.chirp.data.TranscriptEntity
 import com.chirp.realtime.SessionStatus
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -70,6 +75,8 @@ fun MainScreen(
     val sessionState by viewModel.sessionState.collectAsStateWithLifecycle()
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     val apiKey by viewModel.apiKey.collectAsStateWithLifecycle()
+    val sessions by viewModel.sessions.collectAsStateWithLifecycle()
+    val selectedSession by viewModel.selectedSession.collectAsStateWithLifecycle()
     val transcripts by viewModel.transcripts.collectAsStateWithLifecycle()
 
     var showSettings by remember { mutableStateOf(false) }
@@ -112,22 +119,31 @@ fun MainScreen(
                 isConnecting = sessionState.status == SessionStatus.CONNECTING,
             )
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text("Transcript", style = MaterialTheme.typography.titleMedium)
+                Text("Sessions", style = MaterialTheme.typography.titleMedium)
                 FilledTonalButton(onClick = { viewModel.clearTranscripts() }) {
-                    Text("Clear all")
+                    Text("Delete all")
                 }
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(6.dp))
 
-            TranscriptList(transcripts = transcripts, onDelete = viewModel::deleteTranscript)
+            SessionList(
+                sessions = sessions,
+                selectedSessionId = selectedSession?.sessionId,
+                onSelect = viewModel::selectSession,
+                onDelete = viewModel::deleteSession,
+            )
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            TranscriptList(transcripts = transcripts)
         }
     }
 
@@ -173,13 +189,13 @@ private fun StatusCard(
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        shape = RoundedCornerShape(24.dp),
+        shape = RoundedCornerShape(20.dp),
     ) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .background(gradient)
-                .padding(20.dp),
+                .padding(16.dp),
         ) {
             Column {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -201,12 +217,12 @@ private fun StatusCard(
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
                     text = status,
-                    style = MaterialTheme.typography.titleLarge.copy(
+                    style = MaterialTheme.typography.titleMedium.copy(
                         color = MaterialTheme.colorScheme.onPrimary,
                         fontWeight = FontWeight.SemiBold,
                     ),
                 )
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(12.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     Button(
                         onClick = if (isLive || isConnecting) onDisconnect else onConnect,
@@ -239,19 +255,102 @@ private fun StatusCard(
 }
 
 @Composable
+private fun SessionList(
+    sessions: List<SessionEntity>,
+    selectedSessionId: String?,
+    onSelect: (String) -> Unit,
+    onDelete: (String) -> Unit,
+) {
+    if (sessions.isEmpty()) {
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+            shape = RoundedCornerShape(12.dp),
+        ) {
+            Column(modifier = Modifier.padding(12.dp)) {
+                Text("No sessions yet.")
+                Text("Tap Connect to start one.", style = MaterialTheme.typography.bodySmall)
+            }
+        }
+        return
+    }
+
+    LazyColumn(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(160.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        items(sessions, key = { it.sessionId }) { session ->
+            SessionRow(
+                session = session,
+                isSelected = session.sessionId == selectedSessionId,
+                onSelect = { onSelect(session.sessionId) },
+                onDelete = { onDelete(session.sessionId) },
+            )
+        }
+    }
+}
+
+@Composable
+private fun SessionRow(
+    session: SessionEntity,
+    isSelected: Boolean,
+    onSelect: () -> Unit,
+    onDelete: () -> Unit,
+) {
+    val dateFormat = remember { SimpleDateFormat("MMM d, h:mm a", Locale.getDefault()) }
+    val label = remember(session.updatedAt) { dateFormat.format(Date(session.updatedAt)) }
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onSelect),
+        colors = CardDefaults.cardColors(
+            containerColor = if (isSelected) MaterialTheme.colorScheme.secondaryContainer
+            else MaterialTheme.colorScheme.surface,
+        ),
+        shape = RoundedCornerShape(12.dp),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Session",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            IconButton(onClick = onDelete) {
+                Icon(Icons.Filled.Delete, contentDescription = "Delete session")
+            }
+        }
+    }
+}
+
+@Composable
 private fun TranscriptList(
     transcripts: List<TranscriptEntity>,
-    onDelete: (String) -> Unit,
 ) {
     if (transcripts.isEmpty()) {
         Card(
             modifier = Modifier.fillMaxWidth(),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-            shape = RoundedCornerShape(16.dp),
+            shape = RoundedCornerShape(12.dp),
         ) {
-            Column(modifier = Modifier.padding(16.dp)) {
+            Column(modifier = Modifier.padding(12.dp)) {
                 Text("No messages yet.")
-                Text("Start a session to see transcripts.", style = MaterialTheme.typography.bodySmall)
+                Text("Select a session to see its transcript.", style = MaterialTheme.typography.bodySmall)
             }
         }
         return
@@ -259,42 +358,33 @@ private fun TranscriptList(
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         items(transcripts, key = { it.itemId }) { item ->
-            TranscriptRow(item = item, onDelete = { onDelete(item.itemId) })
+            TranscriptRow(item = item)
         }
         item { Spacer(modifier = Modifier.height(16.dp)) }
     }
 }
 
 @Composable
-private fun TranscriptRow(item: TranscriptEntity, onDelete: () -> Unit) {
+private fun TranscriptRow(item: TranscriptEntity) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(12.dp),
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text(
-                    text = if (item.role == "assistant") "Assistant" else "You",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-                IconButton(onClick = onDelete) {
-                    Icon(Icons.Filled.Delete, contentDescription = "Delete")
-                }
-            }
-            Divider(modifier = Modifier.padding(vertical = 8.dp))
+        Column(modifier = Modifier.padding(12.dp)) {
+            Text(
+                text = if (item.role == "assistant") "Assistant" else "You",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.primary,
+            )
+            Divider(modifier = Modifier.padding(vertical = 6.dp))
             Text(
                 text = item.text,
                 style = MaterialTheme.typography.bodyMedium,
-                maxLines = 8,
+                maxLines = 6,
                 overflow = TextOverflow.Ellipsis,
             )
         }
