@@ -15,15 +15,25 @@ class TranscriptStore(
     private val items = ConcurrentHashMap<String, TranscriptEntity>()
     private val currentSessionId = AtomicReference<String?>(null)
 
-    suspend fun startSession(): String {
+    suspend fun startSessionIfNeeded(): String {
         val now = System.currentTimeMillis()
-        val sessionId = UUID.randomUUID().toString()
-        currentSessionId.set(sessionId)
-        sessionRepository.upsert(SessionEntity(sessionId, now, now))
-        return sessionId
+        val existing = currentSessionId.get()
+        if (!existing.isNullOrBlank()) {
+            sessionRepository.touch(existing, now)
+            return existing
+        }
+        return createSession(now)
+    }
+
+    suspend fun startNewSession(): String {
+        return createSession(System.currentTimeMillis())
     }
 
     fun activeSessionId(): String? = currentSessionId.get()
+
+    fun setActiveSession(sessionId: String?) {
+        currentSessionId.set(sessionId)
+    }
 
     suspend fun ensure(itemId: String, role: String, initial: String) {
         val sessionId = currentSessionId.get() ?: return
@@ -79,5 +89,12 @@ class TranscriptStore(
         if (currentSessionId.get() == sessionId) {
             currentSessionId.set(null)
         }
+    }
+
+    private suspend fun createSession(now: Long): String {
+        val sessionId = UUID.randomUUID().toString()
+        currentSessionId.set(sessionId)
+        sessionRepository.upsert(SessionEntity(sessionId, now, now))
+        return sessionId
     }
 }

@@ -89,9 +89,17 @@ class MainViewModel(container: AppContainer) : ViewModel() {
 
     fun selectSession(sessionId: String) {
         selectedSessionId.value = sessionId
+        sessionController.setActiveSession(sessionId)
     }
 
     fun deleteSession(sessionId: String) {
         sessionController.deleteSession(sessionId)
+    }
+
+    fun clearSelectedSession() {
+        viewModelScope.launch {
+            val sessionId = sessionController.startNewSession()
+            selectedSessionId.value = sessionId
+        }
     }
 }
