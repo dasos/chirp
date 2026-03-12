@@ -2,6 +2,7 @@ package com.chirp.realtime
 
 data class SessionConfig(
     val lowBandwidth: Boolean,
+    val speakerphone: Boolean,
     val transcribe: Boolean,
     val maxOutputTokens: Int,
     val model: String = "gpt-realtime",

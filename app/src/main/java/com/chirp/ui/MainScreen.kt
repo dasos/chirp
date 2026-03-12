@@ -409,6 +409,11 @@ private fun SettingsSheet(
                 onCheckedChange = { checked -> onUpdate { it.copy(lowBandwidth = checked) } },
             )
             SettingToggle(
+                title = "Use speakerphone",
+                checked = settings.speakerphone,
+                onCheckedChange = { checked -> onUpdate { it.copy(speakerphone = checked) } },
+            )
+            SettingToggle(
                 title = "Enable transcription",
                 checked = settings.transcribe,
                 onCheckedChange = { checked -> onUpdate { it.copy(transcribe = checked) } },

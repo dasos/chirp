@@ -1,6 +1,7 @@
 package com.chirp.realtime
 
 import android.content.Context
+import android.media.AudioManager
 import android.util.Log
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
@@ -46,6 +47,9 @@ class OpenAiRealtimeClient(
     private var localAudioTrack: AudioTrack? = null
     private var localStream: MediaStream? = null
     private val transcriptScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+    private var previousAudioMode: Int? = null
+    private var previousSpeakerphoneState: Boolean? = null
 
     private var iceGatheringComplete: CompletableDeferred<Unit>? = null
 
@@ -62,6 +66,7 @@ class OpenAiRealtimeClient(
             val sessionInfo = createSession(apiKey, config)
             onStatus(SessionState(SessionStatus.CONNECTING, "Preparing audio…", false))
 
+            configureAudioRoute(config)
             ensurePeerConnectionFactory()
             val pc = buildPeerConnection(onStatus)
             peerConnection = pc
@@ -127,6 +132,25 @@ class OpenAiRealtimeClient(
         localAudioTrack = null
         localAudioSource = null
         localStream = null
+        restoreAudioRoute()
+    }
+
+    private fun configureAudioRoute(config: SessionConfig) {
+        if (previousAudioMode == null) {
+            previousAudioMode = audioManager.mode
+        }
+        if (previousSpeakerphoneState == null) {
+            previousSpeakerphoneState = audioManager.isSpeakerphoneOn
+        }
+        audioManager.mode = AudioManager.MODE_IN_COMMUNICATION
+        audioManager.isSpeakerphoneOn = config.speakerphone
+    }
+
+    private fun restoreAudioRoute() {
+        previousSpeakerphoneState?.let { audioManager.isSpeakerphoneOn = it }
+        previousAudioMode?.let { audioManager.mode = it }
+        previousSpeakerphoneState = null
+        previousAudioMode = null
     }
 
     private suspend fun createSession(apiKey: String, config: SessionConfig): SessionInfo {

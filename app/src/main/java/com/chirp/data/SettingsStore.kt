@@ -21,6 +21,7 @@ class SettingsStore(context: Context) {
     private fun load(): UserSettings {
         return UserSettings(
             lowBandwidth = prefs.getBoolean(KEY_LOW_BW, false),
+            speakerphone = prefs.getBoolean(KEY_SPEAKERPHONE, true),
             transcribe = prefs.getBoolean(KEY_TRANSCRIBE, true),
             maxOutputTokens = prefs.getInt(KEY_MAX_TOKENS, 200),
         )
@@ -29,6 +30,7 @@ class SettingsStore(context: Context) {
     private fun persist(settings: UserSettings) {
         prefs.edit()
             .putBoolean(KEY_LOW_BW, settings.lowBandwidth)
+            .putBoolean(KEY_SPEAKERPHONE, settings.speakerphone)
             .putBoolean(KEY_TRANSCRIBE, settings.transcribe)
             .putInt(KEY_MAX_TOKENS, settings.maxOutputTokens)
             .apply()
@@ -36,6 +38,7 @@ class SettingsStore(context: Context) {
 
     companion object {
         private const val KEY_LOW_BW = "low_bw"
+        private const val KEY_SPEAKERPHONE = "speakerphone"
         private const val KEY_TRANSCRIBE = "transcribe"
         private const val KEY_MAX_TOKENS = "max_tokens"
     }
@@ -43,6 +46,7 @@ class SettingsStore(context: Context) {
 
 data class UserSettings(
     val lowBandwidth: Boolean,
+    val speakerphone: Boolean,
     val transcribe: Boolean,
     val maxOutputTokens: Int,
 )

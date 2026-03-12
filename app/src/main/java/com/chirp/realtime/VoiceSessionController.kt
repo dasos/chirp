@@ -19,6 +19,7 @@ class VoiceSessionController(
         val settings = settingsStore.settingsFlow().value
         val config = SessionConfig(
             lowBandwidth = settings.lowBandwidth,
+            speakerphone = settings.speakerphone,
             transcribe = settings.transcribe,
             maxOutputTokens = settings.maxOutputTokens,
         )
