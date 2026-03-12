@@ -357,6 +357,14 @@ class OpenAiRealtimeClient(
                 }
                 "response.done" -> {
                     val response = json.optJSONObject("response") ?: return
+                    val status = response.optString("status")
+                    val statusDetails = response.optJSONObject("status_details")
+                    if (status == "cancelled" || status == "incomplete" || status == "failed") {
+                        Log.w(
+                            TAG,
+                            "Response ended early: status=$status details=${statusDetails?.toString() ?: "none"}",
+                        )
+                    }
                     val output = response.optJSONArray("output") ?: return
                     for (i in 0 until output.length()) {
                         val item = output.optJSONObject(i) ?: continue
@@ -365,6 +373,12 @@ class OpenAiRealtimeClient(
                             safeTranscript { transcriptStore.finalize(item.getString("id"), text) }
                         }
                     }
+                }
+                "response.cancelled" -> {
+                    Log.w(TAG, "Response cancelled: ${json.optJSONObject("status_details") ?: json}")
+                }
+                "input_audio_buffer.speech_started" -> {
+                    Log.i(TAG, "Server VAD detected speech while session is active")
                 }
             }
         } catch (_: Exception) {
@@ -391,16 +405,22 @@ class OpenAiRealtimeClient(
         return JSONObject().apply {
             put("type", "realtime")
             put("model", config.model)
-            put("max_output_tokens", config.maxOutputTokens)
+            put("max_output_tokens", config.maxOutputTokens.coerceAtLeast(500))
             // Realtime only supports either audio or text output, not both.
             put("output_modalities", JSONArray().put("audio"))
             put("instructions", "You are a friendly voice assistant. Keep replies concise.")
             put("audio", JSONObject().apply {
                 put("input", JSONObject().apply {
                     put("format", buildAudioFormat(config.lowBandwidth))
+                    put("noise_reduction", JSONObject().put("type", "near_field"))
                     put("turn_detection", JSONObject().apply {
                         put("type", "server_vad")
-                        put("silence_duration_ms", 400)
+                        // Avoid the assistant cancelling itself when speaker output bleeds into mic input.
+                        put("threshold", 0.7)
+                        put("prefix_padding_ms", 300)
+                        put("silence_duration_ms", 700)
+                        put("create_response", true)
+                        put("interrupt_response", false)
                     })
                     if (config.transcribe) {
                         put("transcription", JSONObject().apply {
