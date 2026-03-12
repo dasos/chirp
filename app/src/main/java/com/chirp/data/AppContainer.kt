@@ -1,6 +1,10 @@
 package com.chirp.data
 
 import android.content.Context
+import com.chirp.ask.AskSessionController
+import com.chirp.ask.OpenAiAskClient
+import com.chirp.ask.PushToTalkRecorder
+import com.chirp.ask.SpeechPlayer
 import com.chirp.realtime.OpenAiRealtimeClient
 import com.chirp.realtime.TranscriptStore
 import com.chirp.realtime.VoiceSessionController
@@ -41,6 +45,24 @@ class AppContainer(context: Context) {
         realtimeClient = realtimeClient,
         settingsStore = settingsStore,
         transcriptStore = transcriptStore,
+    )
+
+    private val askClient = OpenAiAskClient(
+        context = appContext,
+        httpClient = httpClient,
+        apiKeyStore = apiKeyStore,
+    )
+    private val askRecorder = PushToTalkRecorder(appContext)
+    private val speechPlayer = SpeechPlayer(appContext, settingsStore)
+
+    val askController = AskSessionController(
+        scope = appScope,
+        recorder = askRecorder,
+        askClient = askClient,
+        player = speechPlayer,
+        transcriptStore = transcriptStore,
+        transcriptRepository = transcriptRepository,
+        settingsStore = settingsStore,
     )
 
     val wearSync = WearSync(

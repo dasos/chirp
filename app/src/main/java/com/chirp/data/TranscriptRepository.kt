@@ -9,6 +9,9 @@ class TranscriptRepository(private val dao: TranscriptDao) {
     suspend fun getFirstBySession(sessionId: String, limit: Int): List<TranscriptEntity> =
         dao.getFirstBySession(sessionId, limit)
 
+    suspend fun getRecentBySession(sessionId: String, limit: Int): List<TranscriptEntity> =
+        dao.getRecentBySession(sessionId, limit)
+
     suspend fun upsert(entity: TranscriptEntity) = dao.upsert(entity)
 
     suspend fun deleteAll() = dao.deleteAll()

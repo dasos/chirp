@@ -3,6 +3,7 @@ package com.chirp.ui
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,6 +22,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.StopCircle
 import androidx.compose.material.icons.filled.WifiTethering
@@ -57,10 +59,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.chirp.ask.AskStatus
 import com.chirp.data.SessionEntity
 import com.chirp.data.TranscriptEntity
 import com.chirp.realtime.SessionStatus
@@ -84,6 +88,7 @@ fun MainScreen(
     val sessions by viewModel.sessions.collectAsStateWithLifecycle()
     val selectedSession by viewModel.selectedSession.collectAsStateWithLifecycle()
     val isViewingExistingSession by viewModel.isViewingExistingSession.collectAsStateWithLifecycle()
+    val askState by viewModel.askState.collectAsStateWithLifecycle()
     val transcripts by viewModel.transcripts.collectAsStateWithLifecycle()
 
     var showSettings by remember { mutableStateOf(false) }
@@ -179,7 +184,7 @@ fun MainScreen(
                     .padding(16.dp),
             ) {
                 StatusCard(
-                    status = sessionState.message,
+                    status = if (askState.status == AskStatus.IDLE) sessionState.message else askState.message,
                     isLive = sessionState.status == SessionStatus.CONNECTED,
                     onConnect = {
                         if (apiKey.isNullOrBlank()) {
@@ -191,7 +196,20 @@ fun MainScreen(
                     },
                     onDisconnect = { onStopSession() },
                     isConnecting = sessionState.status == SessionStatus.CONNECTING,
-                    connectLabel = "Connect",
+                    connectLabel = if (isViewingExistingSession) "Continue" else "Talk",
+                    onAskStart = {
+                        if (apiKey.isNullOrBlank()) {
+                            showKey = true
+                        } else {
+                            onRequestMic()
+                            viewModel.beginAsk()
+                        }
+                    },
+                    onAskEnd = viewModel::finishAsk,
+                    onAskCancel = viewModel::cancelAsk,
+                    askEnabled = sessionState.status == SessionStatus.IDLE && askState.status != AskStatus.PROCESSING,
+                    isAskRecording = askState.status == AskStatus.RECORDING,
+                    askLabel = if (askState.status == AskStatus.RECORDING) "Release to ask" else "Ask",
                 )
 
                 Spacer(modifier = Modifier.height(10.dp))
@@ -233,6 +251,12 @@ private fun StatusCard(
     onConnect: () -> Unit,
     onDisconnect: () -> Unit,
     connectLabel: String,
+    onAskStart: () -> Unit,
+    onAskEnd: () -> Unit,
+    onAskCancel: () -> Unit,
+    askEnabled: Boolean,
+    isAskRecording: Boolean,
+    askLabel: String,
 ) {
     val gradient = Brush.linearGradient(
         listOf(
@@ -282,6 +306,7 @@ private fun StatusCard(
                     Button(
                         onClick = if (isLive || isConnecting) onDisconnect else onConnect,
                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.onPrimary),
+                        enabled = !isAskRecording,
                     ) {
                         Icon(
                             imageVector = if (isLive || isConnecting) Icons.Filled.StopCircle else Icons.Filled.WifiTethering,
@@ -294,8 +319,61 @@ private fun StatusCard(
                             color = MaterialTheme.colorScheme.primary,
                         )
                     }
+                    HoldToAskButton(
+                        enabled = askEnabled,
+                        isRecording = isAskRecording,
+                        label = askLabel,
+                        onPressStart = onAskStart,
+                        onPressEnd = onAskEnd,
+                        onPressCancel = onAskCancel,
+                    )
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun HoldToAskButton(
+    enabled: Boolean,
+    isRecording: Boolean,
+    label: String,
+    onPressStart: () -> Unit,
+    onPressEnd: () -> Unit,
+    onPressCancel: () -> Unit,
+) {
+    Card(
+        modifier = Modifier.pointerInput(enabled, isRecording) {
+            detectTapGestures(
+                onPress = {
+                    if (!enabled) return@detectTapGestures
+                    onPressStart()
+                    val released = tryAwaitRelease()
+                    if (released) onPressEnd() else onPressCancel()
+                },
+            )
+        },
+        colors = CardDefaults.cardColors(
+            containerColor = if (enabled) MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.18f)
+            else MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.08f),
+        ),
+        shape = RoundedCornerShape(12.dp),
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Icon(
+                imageVector = Icons.Filled.Mic,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onPrimary,
+            )
+            Text(
+                text = label,
+                color = MaterialTheme.colorScheme.onPrimary,
+                style = MaterialTheme.typography.labelLarge,
+            )
         }
     }
 }
@@ -317,7 +395,7 @@ private fun SessionList(
         ) {
             Column(modifier = Modifier.padding(12.dp)) {
                 Text("No sessions yet.")
-                Text("Tap Connect to start one.", style = MaterialTheme.typography.bodySmall)
+                Text("Tap Talk or hold Ask to start one.", style = MaterialTheme.typography.bodySmall)
             }
         }
         return

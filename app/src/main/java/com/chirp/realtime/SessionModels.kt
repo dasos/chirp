@@ -5,7 +5,7 @@ data class SessionConfig(
     val speakerphone: Boolean,
     val transcribe: Boolean,
     val maxOutputTokens: Int,
-    val model: String = "gpt-realtime",
+    val model: String = "gpt-realtime-mini",
     val voice: String = "verse",
 )
 

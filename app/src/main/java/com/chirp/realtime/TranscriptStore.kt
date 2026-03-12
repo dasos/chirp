@@ -98,6 +98,18 @@ class TranscriptStore(
         }
     }
 
+    suspend fun addCompletedMessage(role: String, text: String): String {
+        val sessionId = startSessionIfNeeded()
+        val now = System.currentTimeMillis()
+        val itemId = UUID.randomUUID().toString()
+        val entity = TranscriptEntity(itemId, sessionId, role, text, now, now)
+        items[itemId] = entity
+        repository.upsert(entity)
+        sessionRepository.touch(sessionId, now)
+        maybeSetTitle(sessionId, text, now)
+        return itemId
+    }
+
     private suspend fun createSession(now: Long): String {
         val sessionId = UUID.randomUUID().toString()
         currentSessionId.set(sessionId)

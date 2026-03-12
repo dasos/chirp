@@ -2,6 +2,9 @@ package com.chirp.ui
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.chirp.ask.AskSessionController
+import com.chirp.ask.AskState
+import com.chirp.ask.AskStatus
 import com.chirp.data.ApiKeyStore
 import com.chirp.data.AppContainer
 import com.chirp.data.SessionEntity
@@ -27,8 +30,10 @@ class MainViewModel(container: AppContainer) : ViewModel() {
     private val transcriptRepository: TranscriptRepository = container.transcriptRepository
     private val sessionRepository: SessionRepository = container.sessionRepository
     private val sessionController: VoiceSessionController = container.sessionController
+    private val askController: AskSessionController = container.askController
 
     val sessionState: StateFlow<SessionState> = sessionController.state
+    val askState: StateFlow<AskState> = askController.state
     val settings: StateFlow<UserSettings> = settingsStore.settingsFlow()
     val apiKey: StateFlow<String?> = apiKeyStore.keyFlow()
 
@@ -142,5 +147,26 @@ class MainViewModel(container: AppContainer) : ViewModel() {
             return
         }
         startNewSession()
+    }
+
+    fun beginAsk() {
+        if (askState.value.status == AskStatus.PROCESSING) return
+        viewModelScope.launch {
+            val activeSessionId = selectedSessionId.value ?: sessionController.startNewSession().also { sessionId ->
+                defaultSessionId.value = sessionId
+                selectedExistingSessionId.value = null
+                selectedSessionId.value = sessionId
+            }
+            sessionController.setActiveSession(activeSessionId)
+            askController.startRecording()
+        }
+    }
+
+    fun finishAsk() {
+        askController.finishRecording()
+    }
+
+    fun cancelAsk() {
+        askController.cancelRecording()
     }
 }

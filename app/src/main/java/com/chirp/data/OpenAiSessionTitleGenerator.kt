@@ -118,6 +118,6 @@ class OpenAiSessionTitleGenerator(
     }
 
     private companion object {
-        private const val TITLE_MODEL = "gpt-4.1-mini"
+        private const val TITLE_MODEL = "gpt-5-nano"
     }
 }
