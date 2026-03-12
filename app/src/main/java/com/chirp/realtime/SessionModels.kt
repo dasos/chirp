@@ -1,5 +1,7 @@
 package com.chirp.realtime
 
+import com.chirp.data.TranscriptEntity
+
 data class SessionConfig(
     val lowBandwidth: Boolean,
     val speakerphone: Boolean,
@@ -7,6 +9,7 @@ data class SessionConfig(
     val maxOutputTokens: Int,
     val model: String = "gpt-realtime-mini",
     val voice: String = "verse",
+    val history: List<TranscriptEntity> = emptyList(),
 )
 
 enum class SessionStatus {

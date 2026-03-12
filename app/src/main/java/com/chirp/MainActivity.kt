@@ -34,6 +34,7 @@ class MainActivity : ComponentActivity() {
                         onStartSession = { startSessionService() },
                         onStopSession = { stopSessionService() },
                         onRequestMic = { requestPermission.launch(android.Manifest.permission.RECORD_AUDIO) },
+                        onNewSession = { viewModel.startNewSession() },
                     )
                 }
             }

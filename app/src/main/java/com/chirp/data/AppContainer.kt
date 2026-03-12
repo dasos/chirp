@@ -45,6 +45,7 @@ class AppContainer(context: Context) {
         realtimeClient = realtimeClient,
         settingsStore = settingsStore,
         transcriptStore = transcriptStore,
+        transcriptRepository = transcriptRepository,
     )
 
     private val askClient = OpenAiAskClient(

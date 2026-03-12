@@ -1,8 +1,14 @@
 package com.chirp.ui
 
+import android.content.Context
+import android.media.AudioManager
+import android.media.ToneGenerator
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -19,6 +25,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.Menu
@@ -53,11 +60,16 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
@@ -81,6 +93,7 @@ fun MainScreen(
     onStartSession: () -> Unit,
     onStopSession: () -> Unit,
     onRequestMic: () -> Unit,
+    onNewSession: () -> Unit,
 ) {
     val sessionState by viewModel.sessionState.collectAsStateWithLifecycle()
     val settings by viewModel.settings.collectAsStateWithLifecycle()
@@ -167,6 +180,9 @@ fun MainScreen(
                         }
                     },
                     actions = {
+                        IconButton(onClick = onNewSession) {
+                            Icon(Icons.Filled.Add, contentDescription = "New session")
+                        }
                         IconButton(onClick = { showSettings = true }) {
                             Icon(Icons.Filled.Settings, contentDescription = "Settings")
                         }
@@ -209,7 +225,6 @@ fun MainScreen(
                     onAskCancel = viewModel::cancelAsk,
                     askEnabled = sessionState.status == SessionStatus.IDLE && askState.status != AskStatus.PROCESSING,
                     isAskRecording = askState.status == AskStatus.RECORDING,
-                    askLabel = if (askState.status == AskStatus.RECORDING) "Release to ask" else "Ask",
                 )
 
                 Spacer(modifier = Modifier.height(10.dp))
@@ -256,7 +271,6 @@ private fun StatusCard(
     onAskCancel: () -> Unit,
     askEnabled: Boolean,
     isAskRecording: Boolean,
-    askLabel: String,
 ) {
     val gradient = Brush.linearGradient(
         listOf(
@@ -322,7 +336,6 @@ private fun StatusCard(
                     HoldToAskButton(
                         enabled = askEnabled,
                         isRecording = isAskRecording,
-                        label = askLabel,
                         onPressStart = onAskStart,
                         onPressEnd = onAskEnd,
                         onPressCancel = onAskCancel,
@@ -337,46 +350,83 @@ private fun StatusCard(
 private fun HoldToAskButton(
     enabled: Boolean,
     isRecording: Boolean,
-    label: String,
     onPressStart: () -> Unit,
     onPressEnd: () -> Unit,
     onPressCancel: () -> Unit,
 ) {
-    Card(
-        modifier = Modifier.pointerInput(enabled, isRecording) {
-            detectTapGestures(
-                onPress = {
-                    if (!enabled) return@detectTapGestures
-                    onPressStart()
-                    val released = tryAwaitRelease()
-                    if (released) onPressEnd() else onPressCancel()
-                },
-            )
-        },
-        colors = CardDefaults.cardColors(
-            containerColor = if (enabled) MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.18f)
-            else MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.08f),
+    val haptic = LocalHapticFeedback.current
+    val context = LocalContext.current
+
+    val scale by animateFloatAsState(
+        targetValue = if (isRecording) 1.13f else 1f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessMedium,
         ),
-        shape = RoundedCornerShape(12.dp),
+        label = "askScale",
+    )
+
+    val currentEnabled by rememberUpdatedState(enabled)
+    val currentIsRecording by rememberUpdatedState(isRecording)
+    val currentOnPressStart by rememberUpdatedState(onPressStart)
+    val currentOnPressEnd by rememberUpdatedState(onPressEnd)
+    val currentOnPressCancel by rememberUpdatedState(onPressCancel)
+
+    Button(
+        onClick = {},
+        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.onPrimary),
+        enabled = enabled || isRecording,
+        modifier = Modifier
+            .scale(scale)
+            .pointerInput(Unit) {
+                detectTapGestures(
+                    onPress = {
+                        if (currentIsRecording) {
+                            // Second tap while recording — stop
+                            currentOnPressEnd()
+                            return@detectTapGestures
+                        }
+                        if (!currentEnabled) return@detectTapGestures
+
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        playChirp(context)
+                        currentOnPressStart()
+
+                        val startTime = System.currentTimeMillis()
+                        val released = tryAwaitRelease()
+                        val holdMs = System.currentTimeMillis() - startTime
+
+                        when {
+                            !released -> currentOnPressCancel()
+                            holdMs >= HOLD_THRESHOLD_MS -> currentOnPressEnd()
+                            // Quick tap: recording stays active; next press stops it
+                        }
+                    },
+                )
+            },
     ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Icon(
-                imageVector = Icons.Filled.Mic,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onPrimary,
-            )
-            Text(
-                text = label,
-                color = MaterialTheme.colorScheme.onPrimary,
-                style = MaterialTheme.typography.labelLarge,
-            )
-        }
+        Icon(
+            imageVector = Icons.Filled.Mic,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+        )
+        Spacer(modifier = Modifier.size(8.dp))
+        Text(
+            text = if (isRecording) "Tap to stop" else "Ask",
+            color = MaterialTheme.colorScheme.primary,
+        )
     }
 }
+
+private fun playChirp(context: Context) {
+    try {
+        val toneGen = ToneGenerator(AudioManager.STREAM_MUSIC, ToneGenerator.MAX_VOLUME / 2)
+        toneGen.startTone(ToneGenerator.TONE_PROP_BEEP, 120)
+        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({ toneGen.release() }, 300)
+    } catch (_: Exception) {}
+}
+
+private const val HOLD_THRESHOLD_MS = 350L
 
 @Composable
 private fun SessionList(
@@ -395,7 +445,7 @@ private fun SessionList(
         ) {
             Column(modifier = Modifier.padding(12.dp)) {
                 Text("No sessions yet.")
-                Text("Tap Talk or hold Ask to start one.", style = MaterialTheme.typography.bodySmall)
+                Text("Tap Talk or tap/hold Ask to start one.", style = MaterialTheme.typography.bodySmall)
             }
         }
         return

@@ -81,7 +81,8 @@ class MainViewModel(container: AppContainer) : ViewModel() {
             }.collect { (all, state, selected) ->
                 if (selected != null && all.none { it.sessionId == selected }) {
                     if (defaultSessionId.value == selected) {
-                        defaultSessionId.value = null
+                        // Session was just created; Room hasn't emitted it yet. Wait.
+                        return@collect
                     }
                     selectedSessionId.value = null
                     selectedExistingSessionId.value = null
@@ -112,6 +113,10 @@ class MainViewModel(container: AppContainer) : ViewModel() {
     }
 
     fun clearTranscripts() {
+        defaultSessionId.value = null
+        selectedSessionId.value = null
+        selectedExistingSessionId.value = null
+        sessionController.setActiveSession(null)
         sessionController.clearTranscripts()
     }
 
@@ -126,6 +131,12 @@ class MainViewModel(container: AppContainer) : ViewModel() {
     }
 
     fun deleteSession(sessionId: String) {
+        if (defaultSessionId.value == sessionId) defaultSessionId.value = null
+        if (selectedSessionId.value == sessionId) {
+            selectedSessionId.value = null
+            selectedExistingSessionId.value = null
+            sessionController.setActiveSession(null)
+        }
         sessionController.deleteSession(sessionId)
     }
 

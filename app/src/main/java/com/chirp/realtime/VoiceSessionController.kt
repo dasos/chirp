@@ -1,6 +1,7 @@
 package com.chirp.realtime
 
 import com.chirp.data.SettingsStore
+import com.chirp.data.TranscriptRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -11,20 +12,23 @@ class VoiceSessionController(
     private val realtimeClient: OpenAiRealtimeClient,
     private val settingsStore: SettingsStore,
     private val transcriptStore: TranscriptStore,
+    private val transcriptRepository: TranscriptRepository,
 ) {
     private val _state = MutableStateFlow(SessionState())
     val state: StateFlow<SessionState> = _state
 
     fun start() {
         val settings = settingsStore.settingsFlow().value
-        val config = SessionConfig(
-            lowBandwidth = settings.lowBandwidth,
-            speakerphone = settings.speakerphone,
-            transcribe = settings.transcribe,
-            maxOutputTokens = settings.maxOutputTokens,
-        )
         scope.launch {
-            transcriptStore.startSessionIfNeeded()
+            val sessionId = transcriptStore.startSessionIfNeeded()
+            val history = transcriptRepository.getRecentBySession(sessionId, HISTORY_LIMIT)
+            val config = SessionConfig(
+                lowBandwidth = settings.lowBandwidth,
+                speakerphone = settings.speakerphone,
+                transcribe = settings.transcribe,
+                maxOutputTokens = settings.maxOutputTokens,
+                history = history,
+            )
             _state.value = SessionState(SessionStatus.CONNECTING, "Requesting session…", false)
             realtimeClient.start(config) { state ->
                 _state.value = state
@@ -66,5 +70,9 @@ class VoiceSessionController(
 
     suspend fun startNewSession(): String {
         return transcriptStore.startNewSession()
+    }
+
+    private companion object {
+        private const val HISTORY_LIMIT = 40
     }
 }

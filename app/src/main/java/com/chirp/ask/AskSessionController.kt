@@ -52,10 +52,10 @@ class AskSessionController(
                     return@launch
                 }
 
+                val history = transcriptRepository.getRecentBySession(sessionId, HISTORY_LIMIT)
                 transcriptStore.addCompletedMessage("user", transcript)
 
                 _state.value = AskState(AskStatus.PROCESSING, "Thinking…")
-                val history = transcriptRepository.getRecentBySession(sessionId, HISTORY_LIMIT)
                 val reply = askClient.generateReply(history, transcript, settingsStore.settingsFlow().value.maxOutputTokens)
                 if (reply.isNullOrBlank()) {
                     _state.value = AskState(AskStatus.ERROR, "Ask failed", "Could not generate a response")

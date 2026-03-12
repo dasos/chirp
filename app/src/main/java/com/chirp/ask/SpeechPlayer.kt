@@ -20,13 +20,17 @@ class SpeechPlayer(
 
     suspend fun play(file: File) {
         stop()
-        configureAudioRoute()
+        val useSpeakerphone = settingsStore.settingsFlow().value.speakerphone
+        configureAudioRoute(useSpeakerphone)
 
         suspendCancellableCoroutine { continuation ->
             val mediaPlayer = MediaPlayer().apply {
                 setAudioAttributes(
                     AudioAttributes.Builder()
-                        .setUsage(AudioAttributes.USAGE_VOICE_COMMUNICATION)
+                        .setUsage(
+                            if (useSpeakerphone) AudioAttributes.USAGE_MEDIA
+                            else AudioAttributes.USAGE_VOICE_COMMUNICATION,
+                        )
                         .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
                         .build(),
                 )
@@ -55,16 +59,19 @@ class SpeechPlayer(
         cleanup(null)
     }
 
-    private fun configureAudioRoute() {
+    private fun configureAudioRoute(useSpeakerphone: Boolean) {
+        if (useSpeakerphone) {
+            // USAGE_MEDIA routes through the loudspeaker by default; no AudioManager changes needed.
+            return
+        }
         if (previousAudioMode == null) {
             previousAudioMode = audioManager.mode
         }
         if (previousSpeakerphoneState == null) {
             previousSpeakerphoneState = audioManager.isSpeakerphoneOn
         }
-        val useSpeakerphone = settingsStore.settingsFlow().value.speakerphone
         audioManager.mode = AudioManager.MODE_IN_COMMUNICATION
-        audioManager.isSpeakerphoneOn = useSpeakerphone
+        audioManager.isSpeakerphoneOn = false
     }
 
     private fun cleanup(file: File?) {

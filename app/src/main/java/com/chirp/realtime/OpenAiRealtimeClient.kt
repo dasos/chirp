@@ -10,6 +10,7 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import com.chirp.data.TranscriptEntity
 import org.json.JSONArray
 import org.json.JSONObject
 import org.webrtc.AudioSource
@@ -46,7 +47,9 @@ class OpenAiRealtimeClient(
     private var localAudioSource: AudioSource? = null
     private var localAudioTrack: AudioTrack? = null
     private var localStream: MediaStream? = null
-    private val transcriptScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    // Single-threaded: ensures ensure() always completes before a subsequent append()
+    // for the same item — events arrive in order from the WebRTC data channel.
+    private val transcriptScope = CoroutineScope(SupervisorJob() + Dispatchers.IO.limitedParallelism(1))
     private val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
     private var previousAudioMode: Int? = null
     private var previousSpeakerphoneState: Boolean? = null
@@ -432,7 +435,7 @@ class OpenAiRealtimeClient(
             put("max_output_tokens", config.maxOutputTokens.coerceAtLeast(500))
             // Realtime only supports either audio or text output, not both.
             put("output_modalities", JSONArray().put("audio"))
-            put("instructions", "You are a friendly voice assistant. Keep replies concise.")
+            put("instructions", buildInstructions(config.history))
             put("audio", JSONObject().apply {
                 put("input", JSONObject().apply {
                     put("format", buildAudioFormat(config.lowBandwidth))
@@ -460,6 +463,16 @@ class OpenAiRealtimeClient(
                 })
             })
         }
+    }
+
+    private fun buildInstructions(history: List<TranscriptEntity>): String {
+        val base = "You are a friendly voice assistant. Keep replies concise."
+        if (history.isEmpty()) return base
+        val historyText = history
+            .sortedBy { it.createdAt }
+            .joinToString("\n") { "${if (it.role == "user") "User" else "Assistant"}: ${it.text}" }
+            .take(8_000)
+        return "$base\n\nYou are resuming a previous conversation. Continue naturally:\n$historyText"
     }
 
     private fun buildAudioFormat(lowBandwidth: Boolean): JSONObject {
