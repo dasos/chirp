@@ -372,12 +372,17 @@ private fun HoldToAskButton(
     val currentOnPressEnd by rememberUpdatedState(onPressEnd)
     val currentOnPressCancel by rememberUpdatedState(onPressCancel)
 
-    Button(
-        onClick = {},
-        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.onPrimary),
-        enabled = enabled || isRecording,
+    val active = enabled || isRecording
+    Box(
+        contentAlignment = Alignment.Center,
         modifier = Modifier
             .scale(scale)
+            .height(40.dp)
+            .clip(RoundedCornerShape(50))
+            .background(
+                if (active) MaterialTheme.colorScheme.onPrimary
+                else MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.38f),
+            )
             .pointerInput(Unit) {
                 detectTapGestures(
                     onPress = {
@@ -405,16 +410,24 @@ private fun HoldToAskButton(
                 )
             },
     ) {
-        Icon(
-            imageVector = Icons.Filled.Mic,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.primary,
-        )
-        Spacer(modifier = Modifier.size(8.dp))
-        Text(
-            text = if (isRecording) "Tap to stop" else "Ask",
-            color = MaterialTheme.colorScheme.primary,
-        )
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Icon(
+                imageVector = Icons.Filled.Mic,
+                contentDescription = null,
+                tint = if (active) MaterialTheme.colorScheme.primary
+                       else MaterialTheme.colorScheme.primary.copy(alpha = 0.38f),
+            )
+            Text(
+                text = if (isRecording) "Tap to stop" else "Ask",
+                color = if (active) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.primary.copy(alpha = 0.38f),
+                style = MaterialTheme.typography.labelLarge,
+            )
+        }
     }
 }
 
