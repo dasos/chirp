@@ -8,4 +8,5 @@ data class SessionEntity(
     @PrimaryKey val sessionId: String,
     val startedAt: Long,
     val updatedAt: Long,
+    val title: String? = null,
 )

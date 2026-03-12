@@ -1,5 +1,6 @@
 package com.chirp.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -19,11 +20,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Key
+import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.StopCircle
 import androidx.compose.material.icons.filled.WifiTethering
-import androidx.compose.material3.AssistChip
-import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -34,6 +34,8 @@ import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalDrawerSheet
+import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -42,12 +44,15 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.rememberDrawerState
+import androidx.compose.material3.DrawerValue
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -60,6 +65,7 @@ import com.chirp.data.SessionEntity
 import com.chirp.data.TranscriptEntity
 import com.chirp.realtime.SessionStatus
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -77,73 +83,121 @@ fun MainScreen(
     val apiKey by viewModel.apiKey.collectAsStateWithLifecycle()
     val sessions by viewModel.sessions.collectAsStateWithLifecycle()
     val selectedSession by viewModel.selectedSession.collectAsStateWithLifecycle()
+    val isViewingExistingSession by viewModel.isViewingExistingSession.collectAsStateWithLifecycle()
     val transcripts by viewModel.transcripts.collectAsStateWithLifecycle()
 
     var showSettings by remember { mutableStateOf(false) }
     var showKey by remember { mutableStateOf(false) }
+    val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
+    val scope = rememberCoroutineScope()
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("Chirp") },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background),
-                actions = {
-                    IconButton(onClick = { showSettings = true }) {
-                        Icon(Icons.Filled.Settings, contentDescription = "Settings")
-                    }
-                    IconButton(onClick = { showKey = true }) {
-                        Icon(Icons.Filled.Key, contentDescription = "API Key")
-                    }
-                },
-            )
-        },
-    ) { padding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .padding(16.dp),
-        ) {
-            StatusCard(
-                status = sessionState.message,
-                isLive = sessionState.status == SessionStatus.CONNECTED,
-                onConnect = {
-                    if (apiKey.isNullOrBlank()) {
-                        showKey = true
-                    } else {
-                        onRequestMic()
-                        onStartSession()
-                    }
-                },
-                onDisconnect = { onStopSession() },
-                isConnecting = sessionState.status == SessionStatus.CONNECTING,
-            )
+    BackHandler(enabled = drawerState.isOpen || isViewingExistingSession) {
+        if (isViewingExistingSession) {
+            viewModel.returnToDefaultSession()
+        }
+        if (drawerState.isOpen) {
+            scope.launch { drawerState.close() }
+        }
+    }
 
-            Spacer(modifier = Modifier.height(12.dp))
+    ModalNavigationDrawer(
+        drawerState = drawerState,
+        drawerContent = {
+            ModalDrawerSheet {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(16.dp),
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text("Sessions", style = MaterialTheme.typography.titleMedium)
+                        FilledTonalButton(
+                            onClick = {
+                                viewModel.startNewSession()
+                                scope.launch { drawerState.close() }
+                            },
+                        ) {
+                            Text("New session")
+                        }
+                    }
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text("Sessions", style = MaterialTheme.typography.titleMedium)
-                FilledTonalButton(onClick = { viewModel.clearTranscripts() }) {
-                    Text("Delete all")
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    SessionList(
+                        sessions = sessions,
+                        selectedSessionId = selectedSession?.sessionId,
+                        onSelect = {
+                            viewModel.selectSession(it)
+                            scope.launch { drawerState.close() }
+                        },
+                        onDelete = viewModel::deleteSession,
+                        modifier = Modifier.weight(1f, fill = true),
+                        fixedHeight = null,
+                    )
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    FilledTonalButton(
+                        onClick = { viewModel.clearTranscripts() },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text("Delete all")
+                    }
                 }
             }
+        },
+    ) {
+        Scaffold(
+            topBar = {
+                TopAppBar(
+                    title = { Text("Chirp") },
+                    colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background),
+                    navigationIcon = {
+                        IconButton(onClick = { scope.launch { drawerState.open() } }) {
+                            Icon(Icons.Filled.Menu, contentDescription = "Open sessions")
+                        }
+                    },
+                    actions = {
+                        IconButton(onClick = { showSettings = true }) {
+                            Icon(Icons.Filled.Settings, contentDescription = "Settings")
+                        }
+                        IconButton(onClick = { showKey = true }) {
+                            Icon(Icons.Filled.Key, contentDescription = "API Key")
+                        }
+                    },
+                )
+            },
+        ) { padding ->
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+                    .padding(16.dp),
+            ) {
+                StatusCard(
+                    status = sessionState.message,
+                    isLive = sessionState.status == SessionStatus.CONNECTED,
+                    onConnect = {
+                        if (apiKey.isNullOrBlank()) {
+                            showKey = true
+                        } else {
+                            onRequestMic()
+                            onStartSession()
+                        }
+                    },
+                    onDisconnect = { onStopSession() },
+                    isConnecting = sessionState.status == SessionStatus.CONNECTING,
+                    connectLabel = "Connect",
+                )
 
-            Spacer(modifier = Modifier.height(6.dp))
+                Spacer(modifier = Modifier.height(10.dp))
 
-            SessionList(
-                sessions = sessions,
-                selectedSessionId = selectedSession?.sessionId,
-                onSelect = viewModel::selectSession,
-                onDelete = viewModel::deleteSession,
-            )
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            TranscriptList(transcripts = transcripts)
+                TranscriptList(transcripts = transcripts)
+            }
         }
     }
 
@@ -178,6 +232,7 @@ private fun StatusCard(
     isConnecting: Boolean,
     onConnect: () -> Unit,
     onDisconnect: () -> Unit,
+    connectLabel: String,
 ) {
     val gradient = Brush.linearGradient(
         listOf(
@@ -235,19 +290,10 @@ private fun StatusCard(
                         )
                         Spacer(modifier = Modifier.size(8.dp))
                         Text(
-                            text = if (isLive || isConnecting) "Disconnect" else "Connect",
+                            text = if (isLive || isConnecting) "Disconnect" else connectLabel,
                             color = MaterialTheme.colorScheme.primary,
                         )
                     }
-                    AssistChip(
-                        onClick = {},
-                        label = { Text("Audio only") },
-                        leadingIcon = null,
-                        colors = AssistChipDefaults.assistChipColors(
-                            containerColor = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.2f),
-                            labelColor = MaterialTheme.colorScheme.onPrimary,
-                        ),
-                    )
                 }
             }
         }
@@ -260,10 +306,12 @@ private fun SessionList(
     selectedSessionId: String?,
     onSelect: (String) -> Unit,
     onDelete: (String) -> Unit,
+    modifier: Modifier = Modifier,
+    fixedHeight: androidx.compose.ui.unit.Dp? = 160.dp,
 ) {
     if (sessions.isEmpty()) {
         Card(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = modifier.fillMaxWidth(),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
             shape = RoundedCornerShape(12.dp),
         ) {
@@ -276,9 +324,11 @@ private fun SessionList(
     }
 
     LazyColumn(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
-            .height(160.dp),
+            .then(
+                if (fixedHeight == null) Modifier else Modifier.height(fixedHeight),
+            ),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         items(sessions, key = { it.sessionId }) { session ->
@@ -321,7 +371,7 @@ private fun SessionRow(
         ) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = "Session",
+                    text = session.title?.ifBlank { "Session" } ?: "Session",
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.primary,
                 )
@@ -350,7 +400,7 @@ private fun TranscriptList(
         ) {
             Column(modifier = Modifier.padding(12.dp)) {
                 Text("No messages yet.")
-                Text("Select a session to see its transcript.", style = MaterialTheme.typography.bodySmall)
+                Text("Start talking to add to the transcript.", style = MaterialTheme.typography.bodySmall)
             }
         }
         return

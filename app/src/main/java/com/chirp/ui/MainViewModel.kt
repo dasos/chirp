@@ -10,6 +10,7 @@ import com.chirp.data.SettingsStore
 import com.chirp.data.TranscriptRepository
 import com.chirp.data.UserSettings
 import com.chirp.realtime.SessionState
+import com.chirp.realtime.SessionStatus
 import com.chirp.realtime.VoiceSessionController
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -32,6 +33,8 @@ class MainViewModel(container: AppContainer) : ViewModel() {
     val apiKey: StateFlow<String?> = apiKeyStore.keyFlow()
 
     private val selectedSessionId = MutableStateFlow<String?>(null)
+    private val selectedExistingSessionId = MutableStateFlow<String?>(null)
+    private val defaultSessionId = MutableStateFlow<String?>(null)
 
     val sessions: StateFlow<List<SessionEntity>> = sessionRepository.streamAll().stateIn(
         viewModelScope,
@@ -49,19 +52,43 @@ class MainViewModel(container: AppContainer) : ViewModel() {
     )
 
     val selectedSession: StateFlow<SessionEntity?> = combine(sessions, selectedSessionId) { all, id ->
-        all.firstOrNull { it.sessionId == id } ?: all.firstOrNull()
+        if (id.isNullOrBlank()) null else all.firstOrNull { it.sessionId == id }
     }.stateIn(
         viewModelScope,
         SharingStarted.WhileSubscribed(5000),
         null,
     )
 
+    val isViewingExistingSession: StateFlow<Boolean> = selectedExistingSessionId
+        .combine(selectedSessionId) { existingId, currentId ->
+            !existingId.isNullOrBlank() && existingId == currentId
+        }
+        .stateIn(
+            viewModelScope,
+            SharingStarted.WhileSubscribed(5000),
+            false,
+        )
+
     init {
         viewModelScope.launch {
-            sessions.collect { all ->
-                val current = selectedSessionId.value
-                if (current == null || all.none { it.sessionId == current }) {
-                    selectedSessionId.value = all.firstOrNull()?.sessionId
+            combine(sessions, sessionState, selectedSessionId) { all, state, selected ->
+                Triple(all, state, selected)
+            }.collect { (all, state, selected) ->
+                if (selected != null && all.none { it.sessionId == selected }) {
+                    if (defaultSessionId.value == selected) {
+                        defaultSessionId.value = null
+                    }
+                    selectedSessionId.value = null
+                    selectedExistingSessionId.value = null
+                    sessionController.setActiveSession(null)
+                    return@collect
+                }
+                if (selected.isNullOrBlank() && state.status != SessionStatus.IDLE) {
+                    val active = sessionController.activeSessionId() ?: return@collect
+                    if (selectedExistingSessionId.value == null) {
+                        defaultSessionId.value = active
+                    }
+                    selectedSessionId.value = active
                 }
             }
         }
@@ -89,6 +116,7 @@ class MainViewModel(container: AppContainer) : ViewModel() {
 
     fun selectSession(sessionId: String) {
         selectedSessionId.value = sessionId
+        selectedExistingSessionId.value = sessionId
         sessionController.setActiveSession(sessionId)
     }
 
@@ -96,10 +124,23 @@ class MainViewModel(container: AppContainer) : ViewModel() {
         sessionController.deleteSession(sessionId)
     }
 
-    fun clearSelectedSession() {
+    fun startNewSession() {
         viewModelScope.launch {
             val sessionId = sessionController.startNewSession()
+            defaultSessionId.value = sessionId
+            selectedExistingSessionId.value = null
             selectedSessionId.value = sessionId
         }
+    }
+
+    fun returnToDefaultSession() {
+        val sessionId = defaultSessionId.value
+        if (!sessionId.isNullOrBlank()) {
+            selectedExistingSessionId.value = null
+            selectedSessionId.value = sessionId
+            sessionController.setActiveSession(sessionId)
+            return
+        }
+        startNewSession()
     }
 }

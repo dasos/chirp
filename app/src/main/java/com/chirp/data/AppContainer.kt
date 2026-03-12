@@ -19,9 +19,15 @@ class AppContainer(context: Context) {
     val transcriptDatabase = TranscriptDatabase.getInstance(appContext)
     val transcriptRepository = TranscriptRepository(transcriptDatabase.transcriptDao())
     val sessionRepository = SessionRepository(transcriptDatabase.sessionDao())
-    val transcriptStore = TranscriptStore(transcriptRepository, sessionRepository)
 
     private val httpClient = OkHttpClient.Builder().build()
+    private val sessionTitleGenerator = OpenAiSessionTitleGenerator(httpClient, apiKeyStore)
+
+    val transcriptStore = TranscriptStore(
+        repository = transcriptRepository,
+        sessionRepository = sessionRepository,
+        titleGenerator = sessionTitleGenerator,
+    )
 
     val realtimeClient = OpenAiRealtimeClient(
         context = appContext,

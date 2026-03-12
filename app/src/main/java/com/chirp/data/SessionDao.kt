@@ -11,6 +11,9 @@ interface SessionDao {
     @Query("SELECT * FROM sessions ORDER BY updatedAt DESC")
     fun streamAll(): Flow<List<SessionEntity>>
 
+    @Query("SELECT * FROM sessions WHERE sessionId = :sessionId LIMIT 1")
+    suspend fun getById(sessionId: String): SessionEntity?
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(entity: SessionEntity)
 

@@ -62,6 +62,8 @@ class VoiceSessionController(
         transcriptStore.setActiveSession(sessionId)
     }
 
+    fun activeSessionId(): String? = transcriptStore.activeSessionId()
+
     suspend fun startNewSession(): String {
         return transcriptStore.startNewSession()
     }

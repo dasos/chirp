@@ -6,6 +6,9 @@ class TranscriptRepository(private val dao: TranscriptDao) {
     fun streamBySession(sessionId: String): Flow<List<TranscriptEntity>> = dao.streamBySession(sessionId)
     fun streamLatest(): Flow<TranscriptEntity?> = dao.streamLatest()
 
+    suspend fun getFirstBySession(sessionId: String, limit: Int): List<TranscriptEntity> =
+        dao.getFirstBySession(sessionId, limit)
+
     suspend fun upsert(entity: TranscriptEntity) = dao.upsert(entity)
 
     suspend fun deleteAll() = dao.deleteAll()

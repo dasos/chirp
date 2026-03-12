@@ -11,6 +11,11 @@ interface TranscriptDao {
     @Query("SELECT * FROM transcripts WHERE sessionId = :sessionId ORDER BY createdAt ASC")
     fun streamBySession(sessionId: String): Flow<List<TranscriptEntity>>
 
+    @Query(
+        "SELECT * FROM transcripts WHERE sessionId = :sessionId ORDER BY createdAt ASC LIMIT :limit",
+    )
+    suspend fun getFirstBySession(sessionId: String, limit: Int): List<TranscriptEntity>
+
     @Query("SELECT * FROM transcripts ORDER BY updatedAt DESC LIMIT 1")
     fun streamLatest(): Flow<TranscriptEntity?>
 

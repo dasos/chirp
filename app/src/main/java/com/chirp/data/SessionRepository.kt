@@ -5,6 +5,8 @@ import kotlinx.coroutines.flow.Flow
 class SessionRepository(private val dao: SessionDao) {
     fun streamAll(): Flow<List<SessionEntity>> = dao.streamAll()
 
+    suspend fun getById(sessionId: String): SessionEntity? = dao.getById(sessionId)
+
     suspend fun upsert(entity: SessionEntity) = dao.upsert(entity)
 
     suspend fun deleteById(sessionId: String) = dao.deleteById(sessionId)

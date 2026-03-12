@@ -1,4 +1,5 @@
 # Chirp — Native Android + Wear OS
+![Static Badge](https://img.shields.io/badge/Vibe-coded-orange) ![Static Badge](https://img.shields.io/badge/Coded_with-Codex-blue)
 
 Chirp is a **native** Android phone app with a **Wear OS companion** that connects directly to OpenAI Realtime using WebRTC. The UI is rebuilt with **Material Design 3** and supports on-device transcript history with deletion controls.
 
@@ -39,8 +40,10 @@ gradle wrapper --gradle-version 8.6
 
 ## Features
 - Native audio session with OpenAI Realtime (WebRTC).
+- Connect starts a fresh session by default; prior sessions are resumed only when selected from the menu.
 - Material 3 UI with status, connect/disconnect, and settings.
 - Transcript history with **delete all** and **per-item delete**.
+- Session titles are generated automatically from the conversation with an OpenAI API call.
 - Wear OS remote control + live status + last transcript line.
 
 ## Known Trade-offs
