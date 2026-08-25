@@ -1,7 +1,7 @@
 # Chirp
 
 <!-- After pushing, replace OWNER/REPO below with your GitHub path so the CI badge resolves. -->
-[![CI](https://github.com/OWNER/REPO/actions/workflows/ci.yml/badge.svg)](https://github.com/OWNER/REPO/actions/workflows/ci.yml)
+[![CI](https://github.com/dasos/chirp/actions/workflows/ci.yml/badge.svg)](https://github.com/dasos/chirp/actions/workflows/ci.yml)
 ![Platform](https://img.shields.io/badge/platform-Android-3DDC84?logo=android&logoColor=white)
 ![Min SDK](https://img.shields.io/badge/minSdk-26-blue)
 ![Kotlin](https://img.shields.io/badge/Kotlin-2.0-7F52FF?logo=kotlin&logoColor=white)
@@ -257,4 +257,4 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, conventions, and the PR checkl
 
 ## License
 
-[MIT](LICENSE) © 2026 Chirp contributors. (Update the copyright line in `LICENSE` to your name/handle if you like.)
+[MIT](LICENSE) © 2026 dasos.
