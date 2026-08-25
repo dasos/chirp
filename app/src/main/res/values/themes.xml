@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The UI is entirely Jetpack Compose; this XML theme just provides the
+         window background and transparent system bars for edge-to-edge. -->
+    <style name="Theme.Chirp" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/chirp_window_background</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+    </style>
+</resources>

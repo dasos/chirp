@@ -1,0 +1,16 @@
+*.iml
+.gradle/
+/local.properties
+/.idea/
+.DS_Store
+/build
+*/build/
+/captures
+.externalNativeBuild
+.cxx
+local.properties
+*.keystore
+!debug.keystore
+
+# Claude Code personal/local settings (keep secrets & machine-specific perms out of the repo)
+.claude/settings.local.json

@@ -1,0 +1,66 @@
+name: CI
+
+# Builds the app and runs the test suites on every push/PR. This doubles as an
+# automated compile-check since the Gradle wrapper JAR is not committed: each job
+# installs a pinned Gradle (via setup-gradle) and invokes `gradle` directly, so no
+# wrapper JAR is required.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  core-tests:
+    name: Core unit tests (JVM)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.11.1'
+      - name: Run :core unit tests
+        run: gradle :core:test --no-daemon --stacktrace
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: core-test-report
+          path: core/build/reports/tests/
+          if-no-files-found: ignore
+
+  android-build:
+    name: Assemble debug APK
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      # Installs the Android command-line tools and accepts SDK licenses.
+      - uses: android-actions/setup-android@v3
+      - name: Install required SDK packages
+        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.11.1'
+      - name: Assemble debug APK
+        run: gradle :app:assembleDebug --no-daemon --stacktrace
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: chirp-debug-apk
+          path: app/build/outputs/apk/debug/*.apk
+          if-no-files-found: ignore
