@@ -16,7 +16,8 @@ data class SessionSettings(
     val ttsSpeed: Float = 1.0f,
     val ttsVoiceId: String? = null,
     val temperature: Double? = null,
-    val numCtx: Int? = null,
+    /** Ask the backend's server-side web search to ground replies. */
+    val webSearch: Boolean = false,
     /** Max consecutive no-match turns before the loop pauses itself. */
     val maxNoMatchRetries: Int = 2,
     /** Network retry policy for streaming chat. */

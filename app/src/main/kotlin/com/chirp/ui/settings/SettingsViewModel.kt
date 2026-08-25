@@ -4,7 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.chirp.core.chat.ChatClient
 import com.chirp.core.chat.ConnectionResult
-import com.chirp.core.chat.OllamaModel
+import com.chirp.core.chat.ChatModel
 import com.chirp.core.speech.TextToSpeechEngine
 import com.chirp.core.speech.TtsVoice
 import com.chirp.data.settings.AppSettings
@@ -36,8 +36,8 @@ class SettingsViewModel @Inject constructor(
     val settings: StateFlow<AppSettings?> = settingsRepository.settings
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
-    private val _models = MutableStateFlow<List<OllamaModel>>(emptyList())
-    val models: StateFlow<List<OllamaModel>> = _models.asStateFlow()
+    private val _models = MutableStateFlow<List<ChatModel>>(emptyList())
+    val models: StateFlow<List<ChatModel>> = _models.asStateFlow()
 
     private val _voices = MutableStateFlow<List<TtsVoice>>(emptyList())
     val voices: StateFlow<List<TtsVoice>> = _voices.asStateFlow()
@@ -79,7 +79,6 @@ class SettingsViewModel @Inject constructor(
                 is ConnectionResult.Success -> ConnectionUiState.Success(
                     buildString {
                         append("Connected")
-                        result.version?.let { append(" · Ollama $it") }
                         append(" · ${result.modelCount} models")
                     },
                 )

@@ -42,7 +42,7 @@ import javax.inject.Singleton
  * and reusable. It orchestrates the injected [SpeechToTextEngine],
  * [ChatClient] and [TextToSpeechEngine] over a single long-lived loop:
  *
- *   listen -> (transcript) -> stream from Ollama -> speak sentence-by-sentence
+ *   listen -> (transcript) -> stream from the chat backend -> speak sentence-by-sentence
  *   -> auto-listen again.
  *
  * The first complete sentence is spoken as soon as it streams in (see
@@ -309,7 +309,7 @@ class SessionController @Inject constructor(
             model = s.model,
             messages = history,
             temperature = s.temperature,
-            numCtx = s.numCtx,
+            webSearch = s.webSearch,
         )
 
         val sentenceBuffer = SentenceBuffer()

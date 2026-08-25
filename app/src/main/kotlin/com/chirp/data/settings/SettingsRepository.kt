@@ -17,10 +17,10 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Stores all settings in EncryptedSharedPreferences (so the basic-auth password
- * is encrypted at rest) and implements the :core [SettingsProvider]. Also keeps
+ * Stores all settings in EncryptedSharedPreferences (so the API key is encrypted
+ * at rest) and implements the :core [SettingsProvider]. Also keeps
  * [ConnectionConfigHolder] current so the network layer always uses the latest
- * server URL + credentials.
+ * base URL + key.
  */
 @Singleton
 class SettingsRepository @Inject constructor(
@@ -69,38 +69,38 @@ class SettingsRepository @Inject constructor(
             listeningTimeoutMs = s.listeningTimeoutMs,
             ttsSpeed = s.ttsSpeed,
             ttsVoiceId = s.ttsVoiceId,
+            webSearch = s.webSearch,
         )
     }
 
     fun connectionConfig(): ConnectionConfig {
         val s = read()
         return ConnectionConfig(
-            baseUrl = normalizeUrl(s.serverUrl),
-            username = s.authUsername.ifBlank { null },
-            password = s.authPassword.ifBlank { null },
+            baseUrl = normalizeUrl(s.baseUrl.ifBlank { AppSettings.DEFAULT_BASE_URL }),
+            apiKey = s.apiKey.ifBlank { null },
         )
     }
 
     suspend fun update(transform: (AppSettings) -> AppSettings) = withContext(dispatchers.io) {
         val updated = transform(read())
         prefs.edit().apply {
-            putString(KEY_SERVER_URL, updated.serverUrl)
-            putString(KEY_AUTH_USER, updated.authUsername)
-            putString(KEY_AUTH_PASS, updated.authPassword)
+            putString(KEY_BASE_URL, updated.baseUrl)
+            putString(KEY_API_KEY, updated.apiKey)
             putString(KEY_MODEL, updated.model)
             putString(KEY_SYSTEM_PROMPT, updated.systemPrompt)
             putFloat(KEY_TTS_SPEED, updated.ttsSpeed)
             putString(KEY_TTS_VOICE, updated.ttsVoiceId)
             putBoolean(KEY_AUTO_LISTEN, updated.autoListen)
             putLong(KEY_LISTEN_TIMEOUT, updated.listeningTimeoutMs)
+            putBoolean(KEY_WEB_SEARCH, updated.webSearch)
         }.apply()
         updateConnectionHolder()
     }
 
     private fun read(): AppSettings = AppSettings(
-        serverUrl = prefs.getString(KEY_SERVER_URL, "").orEmpty(),
-        authUsername = prefs.getString(KEY_AUTH_USER, "").orEmpty(),
-        authPassword = prefs.getString(KEY_AUTH_PASS, "").orEmpty(),
+        baseUrl = prefs.getString(KEY_BASE_URL, AppSettings.DEFAULT_BASE_URL)
+            ?: AppSettings.DEFAULT_BASE_URL,
+        apiKey = prefs.getString(KEY_API_KEY, "").orEmpty(),
         model = prefs.getString(KEY_MODEL, "").orEmpty(),
         systemPrompt = prefs.getString(KEY_SYSTEM_PROMPT, AppSettings.DEFAULT_SYSTEM_PROMPT)
             ?: AppSettings.DEFAULT_SYSTEM_PROMPT,
@@ -108,6 +108,7 @@ class SettingsRepository @Inject constructor(
         ttsVoiceId = prefs.getString(KEY_TTS_VOICE, null),
         autoListen = prefs.getBoolean(KEY_AUTO_LISTEN, true),
         listeningTimeoutMs = prefs.getLong(KEY_LISTEN_TIMEOUT, 2_000L),
+        webSearch = prefs.getBoolean(KEY_WEB_SEARCH, false),
     )
 
     private fun updateConnectionHolder() = connectionHolder.update(connectionConfig())
@@ -116,14 +117,14 @@ class SettingsRepository @Inject constructor(
 
     companion object {
         private const val PREFS_FILE = "chirp_secure_settings"
-        private const val KEY_SERVER_URL = "server_url"
-        private const val KEY_AUTH_USER = "auth_user"
-        private const val KEY_AUTH_PASS = "auth_pass"
+        private const val KEY_BASE_URL = "api_base_url"
+        private const val KEY_API_KEY = "api_key"
         private const val KEY_MODEL = "model"
         private const val KEY_SYSTEM_PROMPT = "system_prompt"
         private const val KEY_TTS_SPEED = "tts_speed"
         private const val KEY_TTS_VOICE = "tts_voice"
         private const val KEY_AUTO_LISTEN = "auto_listen"
         private const val KEY_LISTEN_TIMEOUT = "listen_timeout"
+        private const val KEY_WEB_SEARCH = "web_search"
     }
 }

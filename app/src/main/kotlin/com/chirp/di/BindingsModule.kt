@@ -7,7 +7,7 @@ import com.chirp.core.speech.SpeechToTextEngine
 import com.chirp.core.speech.TextToSpeechEngine
 import com.chirp.data.repository.ConversationRepository
 import com.chirp.data.settings.SettingsRepository
-import com.chirp.network.OllamaChatClient
+import com.chirp.network.OpenRouterChatClient
 import com.chirp.speech.AndroidSpeechToText
 import com.chirp.speech.AndroidTextToSpeech
 import dagger.Binds
@@ -23,7 +23,7 @@ abstract class BindingsModule {
 
     @Binds
     @Singleton
-    abstract fun bindChatClient(impl: OllamaChatClient): ChatClient
+    abstract fun bindChatClient(impl: OpenRouterChatClient): ChatClient
 
     @Binds
     @Singleton

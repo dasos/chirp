@@ -2,7 +2,7 @@ package com.chirp.network
 
 /**
  * Heuristic for whether [host] is local/private, in which case plaintext HTTP is
- * tolerated (e.g. talking to Ollama on the same LAN). Anything else must use
+ * tolerated (e.g. talking to a self-hosted gateway on the same LAN). Anything else must use
  * HTTPS — see [AuthInterceptor].
  */
 internal fun isLocalHost(host: String): Boolean {

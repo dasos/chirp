@@ -1,7 +1,6 @@
 package com.chirp.network
 
 import com.chirp.data.settings.ConnectionConfigHolder
-import okhttp3.Credentials
 import okhttp3.Interceptor
 import okhttp3.Response
 import java.io.IOException
@@ -9,11 +8,10 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Adds HTTP Basic auth to **every** request when credentials are configured, and
- * refuses to talk to a non-local host over plaintext HTTP (so credentials are
- * never sent in the clear to a remote server). The user runs Ollama behind a
- * reverse proxy with HTTPS + basic auth; this guarantees the header is always
- * attached and the transport is encrypted.
+ * Adds `Authorization: Bearer <key>` to **every** request when an API key is
+ * configured, and refuses to talk to a non-local host over plaintext HTTP (so
+ * the key is never sent in the clear). The default endpoint is OpenRouter; a
+ * self-hosted gateway behind HTTPS works identically.
  */
 @Singleton
 class AuthInterceptor @Inject constructor(
@@ -34,7 +32,7 @@ class AuthInterceptor @Inject constructor(
         val config = connectionHolder.config
         val builder = request.newBuilder()
         if (config.hasAuth) {
-            builder.header("Authorization", Credentials.basic(config.username!!, config.password!!))
+            builder.header("Authorization", "Bearer ${config.apiKey}")
         }
         return chain.proceed(builder.build())
     }

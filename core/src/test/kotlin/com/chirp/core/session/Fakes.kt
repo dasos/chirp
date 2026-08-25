@@ -4,8 +4,8 @@ import com.chirp.core.chat.ChatClient
 import com.chirp.core.chat.ChatRequestSpec
 import com.chirp.core.chat.ChatStreamEvent
 import com.chirp.core.chat.ConnectionResult
-import com.chirp.core.chat.OllamaException
-import com.chirp.core.chat.OllamaModel
+import com.chirp.core.chat.ChatException
+import com.chirp.core.chat.ChatModel
 import com.chirp.core.model.Conversation
 import com.chirp.core.model.Message
 import com.chirp.core.model.Role
@@ -24,15 +24,15 @@ import kotlinx.coroutines.flow.flow
 class FakeChatClient(
     var tokens: List<String> = emptyList(),
     var failAlways: Boolean = false,
-    var models: List<OllamaModel> = emptyList(),
+    var models: List<ChatModel> = emptyList(),
 ) : ChatClient {
     override fun streamChat(spec: ChatRequestSpec): Flow<ChatStreamEvent> = flow {
-        if (failAlways) throw OllamaException("boom")
+        if (failAlways) throw ChatException("boom")
         tokens.forEach { emit(ChatStreamEvent.Token(it)) }
         emit(ChatStreamEvent.Completed(null))
     }
 
-    override suspend fun listModels(): List<OllamaModel> = models
+    override suspend fun listModels(): List<ChatModel> = models
     override suspend fun testConnection(): ConnectionResult = ConnectionResult.Success(null, models.size)
 }
 

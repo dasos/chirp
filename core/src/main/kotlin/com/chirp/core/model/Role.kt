@@ -1,6 +1,6 @@
 package com.chirp.core.model
 
-/** Author of a chat message, mirroring Ollama's `role` field. */
+/** Author of a chat message, using the OpenAI-compatible `role` wire names. */
 enum class Role(val wireName: String) {
     SYSTEM("system"),
     USER("user"),

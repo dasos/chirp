@@ -11,7 +11,7 @@ import javax.inject.Singleton
 @Singleton
 class ConnectionConfigHolder @Inject constructor() {
     @Volatile
-    var config: ConnectionConfig = ConnectionConfig(baseUrl = "", username = null, password = null)
+    var config: ConnectionConfig = ConnectionConfig(baseUrl = "", apiKey = null)
         private set
 
     fun update(newConfig: ConnectionConfig) {

@@ -7,13 +7,14 @@
 ![Kotlin](https://img.shields.io/badge/Kotlin-2.0-7F52FF?logo=kotlin&logoColor=white)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-A native Android app for **hands-free voice conversations with a self-hosted Ollama server**, designed for use while walking with Bluetooth headphones.
+A native Android app for **hands-free voice conversations with AI models via [OpenRouter](https://openrouter.ai)** — or any OpenAI-compatible endpoint — designed for use while walking with Bluetooth headphones.
 
-Speak → on-device speech-to-text → stream the reply from Ollama → speak it back **sentence-by-sentence** as it arrives → automatically listen again. The loop runs in a foreground service so it survives screen-off, and headset media buttons pause/resume it.
+Speak → on-device speech-to-text → stream the reply from the chat backend → speak it back **sentence-by-sentence** as it arrives → automatically listen again. The loop runs in a foreground service so it survives screen-off, and headset media buttons pause/resume it.
 
 - **Kotlin + Jetpack Compose** (Material 3, dynamic color, dark mode)
-- **No custom backend** — the app talks directly to Ollama (`/api/chat`, `/api/tags`, `/api/version`)
-- Coroutines + Flow, MVVM, Hilt, Room, OkHttp (NDJSON streaming) + kotlinx.serialization
+- **OpenRouter by default, nothing else required** — the app talks directly to `https://openrouter.ai/api/v1` (`POST /chat/completions`, `GET /models`); any OpenAI-compatible gateway (e.g. a self-hosted LiteLLM box) works via the advanced base-URL setting
+- Optional **server-side web search** (OpenRouter's `openrouter:web_search` tool) so replies can be grounded in current web results
+- Coroutines + Flow, MVVM, Hilt, Room, OkHttp (SSE streaming) + kotlinx.serialization
 - On-device `SpeechRecognizer` (STT) and `TextToSpeech` (TTS), behind clean interfaces so server-side Whisper/Piper can be dropped in later
 - Min SDK 26, target/compile SDK 35
 
@@ -25,7 +26,7 @@ Speak → on-device speech-to-text → stream the reply from Ollama → speak it
 - [Screenshots](#screenshots)
 - [Architecture](#architecture)
 - [Build & run](#build--run)
-- [Reverse proxy: Caddy + HTTPS + Basic Auth in front of Ollama](#reverse-proxy-caddy--https--basic-auth-in-front-of-ollama)
+- [API access: keys, gateways and HTTPS](#api-access-keys-gateways-and-https)
 - [In-app configuration](#in-app-configuration)
 - [Permissions](#permissions)
 - [Testing](#testing)
@@ -43,7 +44,7 @@ Speak → on-device speech-to-text → stream the reply from Ollama → speak it
 - ⚡ **Low-latency speech** — the reply is spoken **sentence-by-sentence** as it streams in, instead of waiting for the whole response.
 - 🎧 **Bluetooth-aware** — routes the mic over Bluetooth SCO when a headset is connected, requests audio focus, and maps **headset media buttons** to pause/resume and stop speaking.
 - 🔔 **Survives screen-off** — a foreground service keeps the session alive, with a persistent notification showing state (Listening / Thinking / Speaking / Paused), the latest partial reply, an elapsed "Thinking…" timer, and Pause/Resume + Stop actions.
-- 🔒 **Your server, your rules** — talks directly to Ollama with an optional **HTTP Basic Auth** header on every request (for a reverse proxy), and requires HTTPS for non-local hosts. Credentials are stored in `EncryptedSharedPreferences`.
+- 🔒 **Your key, your rules** — the API key is stored in `EncryptedSharedPreferences`, sent as a bearer token on every request, and plaintext HTTP to non-local hosts is refused.
 - 💾 **History** — conversations and messages persist locally (Room), with auto-generated titles, swipe-to-delete, and tap-to-continue.
 - ⌨️ **Type-instead-of-speak** fallback for noisy environments.
 - 🗣️ **Spoken errors** — "Connection lost", "I didn't catch that", etc., with retry/backoff — because you're not looking at the screen.
@@ -67,7 +68,8 @@ Two Gradle modules keep the portable session logic free of Android so it is unit
               SessionController  ← the hands-free loop (state machine)
               ConversationStore, SettingsProvider  (interfaces the app implements)
   speech/     SpeechToTextEngine, TextToSpeechEngine (interfaces), SentenceBuffer
-  chat/       ChatClient (interface), ChatStreamEvent, Ollama DTOs, OllamaStreamParser
+  chat/       ChatClient (interface), ChatStreamEvent, OpenAI-compatible wire DTOs,
+              OpenAiStreamParser
   wear/       WearContract  ← Phase 2 Data Layer paths + (de)serialization
   util/       DispatcherProvider, Clock
 
@@ -75,8 +77,8 @@ Two Gradle modules keep the portable session logic free of Android so it is unit
   data/local/      Room: entities, DAOs, ChirpDatabase
   data/repository/ ConversationRepository       (implements ConversationStore)
   data/settings/   SettingsRepository            (EncryptedSharedPreferences; implements SettingsProvider)
-                   ConnectionConfigHolder        (current server URL + auth, read per request)
-  network/         OllamaChatClient (implements ChatClient), AuthInterceptor (basic auth + HTTPS-for-remote)
+                   ConnectionConfigHolder        (current base URL + API key, read per request)
+  network/         OpenRouterChatClient (implements ChatClient), AuthInterceptor (bearer auth + HTTPS-for-remote)
   speech/          AndroidSpeechToText, AndroidTextToSpeech
   audio/           AudioRouteManager (focus + Bluetooth SCO), MediaSessionController (headset buttons)
   service/         ConversationService (foreground), ConversationNotification
@@ -88,7 +90,7 @@ Two Gradle modules keep the portable session logic free of Android so it is unit
 
 `SessionController` (in `:core`) is the single source of truth. It runs one long-lived coroutine:
 
-> **listen** → transcript → **stream** from Ollama → feed tokens to `SentenceBuffer` → **speak** each complete sentence as soon as it's ready (streaming continues while speaking) → **auto-listen** again.
+> **listen** → transcript → **stream** from the chat backend → feed tokens to `SentenceBuffer` → **speak** each complete sentence as soon as it's ready (streaming continues while speaking) → **auto-listen** again.
 
 Control actions (pause / resume / stop / stop-speaking / submit-text) interrupt the loop by cancelling and relaunching it from a clean point, with intent preserved in fields — this avoids fragile self-cancellation of an in-flight turn. State is exposed as a `StateFlow<SessionState>`; one-off effects (haptics) as a `SharedFlow<SessionEvent>`.
 
@@ -107,7 +109,7 @@ The `ConversationService` adds the Android concerns the pure controller shouldn'
 
 ### Networking
 
-`OllamaChatClient` posts to `/api/chat` with `stream: true` and reads the NDJSON response **line-by-line** via OkHttp + Okio, mapping each line with the pure `OllamaStreamParser`. `AuthInterceptor` attaches `Authorization: Basic …` to **every** request when credentials are configured, and refuses plaintext HTTP to non-local hosts.
+`OpenRouterChatClient` posts to `{base}/chat/completions` with `stream: true` and reads the SSE response **line-by-line** via OkHttp + Okio, mapping each `data:` line with the pure `OpenAiStreamParser`. When web search is enabled it adds `tools: [{"type": "openrouter:web_search"}]`, letting OpenRouter ground the reply server-side. `AuthInterceptor` attaches `Authorization: Bearer …` to **every** request when a key is configured, and refuses plaintext HTTP to non-local hosts.
 
 ---
 
@@ -135,61 +137,34 @@ gradle wrapper            # one-time, if you don't already have ./gradlew + the 
 First launch:
 
 1. Open **Settings** (gear icon).
-2. Enter your **Server URL** (e.g. `https://ollama.example.com`) and, if your proxy uses it, the **Basic auth** username/password.
-3. Tap **Test connection**, then pick a **Model** (the list is fetched from `/api/tags`).
+2. Paste your **API key** (create one at [openrouter.ai/keys](https://openrouter.ai/keys)).
+3. Tap **Test connection**, then pick a **Model** (the list is fetched from `GET /models`). Toggle **Web search** if you want grounded replies.
 4. Go back, tap **New conversation**, then tap the mic and start talking.
 
 ---
 
-## Reverse proxy: Caddy + HTTPS + Basic Auth in front of Ollama
+## API access: keys, gateways and HTTPS
 
-Ollama has no built-in auth and binds to `127.0.0.1:11434` by default. Put [Caddy](https://caddyserver.com/) in front of it to add TLS and HTTP Basic Auth — Chirp then talks to Caddy over HTTPS and sends the `Authorization` header on every request.
+The default endpoint is OpenRouter's public API (`https://openrouter.ai/api/v1`), authenticated with a bearer key from [openrouter.ai/keys](https://openrouter.ai/keys). OpenRouter gives access to models from Anthropic, Google, Meta, Mistral, OpenAI and many others with per-token pricing.
 
-**1. Generate a bcrypt password hash:**
+**Self-hosted gateways work unchanged.** Because the app speaks the plain OpenAI-compatible wire format, pointing it at e.g. a [LiteLLM](https://docs.litellm.ai/docs/simple_proxy) proxy is just a settings change — open **Advanced** under the API key section and set a different base URL; any key you configured on the gateway goes in the same field.
 
-```bash
-caddy hash-password --plaintext 'your-strong-password'
-# → $2a$14$abcd...   (copy this hash)
-```
+**Transport rules:** the app refuses to send your key over plaintext HTTP to non-local hosts (enforced in code by `AuthInterceptor`), so remote endpoints must be HTTPS.
 
-**2. `Caddyfile`:**
-
-```caddyfile
-ollama.example.com {
-    # Caddy v2.8+ uses `basic_auth`; older versions use `basicauth`.
-    basic_auth {
-        # <username>  <bcrypt-hash-from-step-1>
-        walker $2a$14$abcd...replace-with-your-hash...
-    }
-
-    reverse_proxy 127.0.0.1:11434 {
-        # Stream NDJSON tokens through immediately instead of buffering,
-        # so Chirp can start speaking the first sentence with low latency.
-        flush_interval -1
-
-        # Ollama checks the Host header; present itself as a local client.
-        header_up Host {upstream_hostport}
-    }
-}
-```
-
-- For a **public domain**, Caddy automatically provisions a Let's Encrypt certificate.
-- For a **LAN-only** setup, use a hostname you control plus Caddy's internal CA (`tls internal`) — and install Caddy's root cert on the phone — or terminate TLS with a real certificate for a domain that resolves to your LAN IP.
-- Run it: `caddy run` (or `caddy start`). Point Chirp's Server URL at `https://ollama.example.com`.
-
-> **Local development without a proxy:** you can point Chirp directly at `http://<lan-ip>:11434` (start Ollama with `OLLAMA_HOST=0.0.0.0`). Chirp permits plaintext HTTP only for local/private hosts; remote hosts must be HTTPS.
+> **Local development:** plaintext HTTP is permitted for local/private hosts (localhost, 10.x, 192.168.x, 172.16–31.x, `.local`, …), so you can point the app at an unencrypted gateway on your LAN while developing.
 
 ---
 
 ## In-app configuration
 
-All settings persist in `EncryptedSharedPreferences` (so the basic-auth password is encrypted at rest):
+All settings persist in `EncryptedSharedPreferences` (so the API key is encrypted at rest):
 
 | Setting | Notes |
 |---|---|
-| Server URL | `https://…` required for non-local hosts |
-| Basic auth username / password | Optional; sent as `Authorization: Basic` on every request |
-| Model | Fetched from `GET /api/tags`; refreshable |
+| API key | Sent as `Authorization: Bearer` on every request |
+| API base URL *(Advanced)* | Defaults to `https://openrouter.ai/api/v1`; any OpenAI-compatible endpoint |
+| Model | Fetched from `GET /models`; refreshable |
+| Web search | Server-side grounding via OpenRouter's `openrouter:web_search` tool (extra cost per search) |
 | System prompt | Sent as the leading `system` message |
 | Speaking speed | TTS rate, 0.5×–2.0× |
 | Voice | Installed `TextToSpeech` voices |
@@ -214,7 +189,7 @@ Declared (no runtime prompt): `INTERNET`, `ACCESS_NETWORK_STATE`, `MODIFY_AUDIO_
 
 - **`:core` unit tests** (pure JVM, fast):
   - `SentenceBufferTest` — sentence boundary detection: confirmed terminators, decimals (`3.14`), abbreviations/initials/acronyms, newlines, and the max-length flush.
-  - `OllamaStreamParserTest` — token / done / error / blank / unknown-field NDJSON lines.
+   - `OpenAiStreamParserTest` — token / usage / `[DONE]` / error / blank / unknown-field SSE lines.
   - `SessionControllerTest` — full turn via injected text (asserts persistence + sentence-by-sentence speech), stop→idle, and stream-failure→retry→"Connection lost" without persisting an empty reply. Uses fakes + a test dispatcher.
 - **`:app` instrumentation test**: `ConversationDaoTest` — insert/read, ordering, user-message count, and `ON DELETE CASCADE`.
 
@@ -240,7 +215,8 @@ To add it later: create a `:wear` module (uncomment the include in `settings.gra
 
 - **Bluetooth audio uses SCO for the whole session** (not A2DP). SCO is mono/narrowband, so TTS quality over Bluetooth is "phone-call" grade rather than music-grade. This is the trade-off for using the headset microphone hands-free; per-turn SCO toggling would improve playback quality at the cost of ~1–2s of latency each turn. TTS routing falls back to loud media output when no SCO headset is present.
 - **On-device STT** (`SpeechRecognizer`) quality and offline availability vary by device/OEM; some recognizers require network. The `SpeechToTextEngine` interface exists so a server-side Whisper engine can replace it.
-- **Mid-stream network drops are not resumed**: retries with backoff happen only before any tokens arrive (Ollama can't resume a partial generation, and re-requesting would duplicate already-spoken text). After tokens start, a drop ends the turn with a spoken "Connection lost" and keeps whatever was received.
+- **Mid-stream network drops are not resumed**: retries with backoff happen only before any tokens arrive (the chat APIs can't resume a partial generation, and re-requesting would duplicate already-spoken text). After tokens start, a drop ends the turn with a spoken "Connection lost" and keeps whatever was received.
+- **Web search is server-side** and billed per search by OpenRouter; generic OpenAI-compatible gateways may not support the `openrouter:web_search` tool, so disable the toggle when pointing at one.
 - **Sentence splitting is heuristic.** It handles decimals, common abbreviations, initials and dotted acronyms, but unusual punctuation may split imperfectly; a long unpunctuated stream is flushed at word boundaries so speech never stalls.
 - **`fallbackToDestructiveMigration()`** is used for the v1 Room database — fine for a single-version app, but add real migrations before shipping schema changes.
 - **The Gradle wrapper jar is not committed** (see [Build & run](#build--run)); Android Studio or `gradle wrapper` generates it. GitHub Actions CI compiles the app and runs the tests on every push.

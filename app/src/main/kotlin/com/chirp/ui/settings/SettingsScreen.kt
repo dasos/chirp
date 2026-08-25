@@ -83,7 +83,7 @@ fun SettingsScreen(
                 .fillMaxSize()
                 .padding(padding),
             settings = loaded,
-            models = models.map { it.name },
+            models = models.map { it.id },
             voices = voices,
             modelsLoading = modelsLoading,
             connection = connection,
@@ -111,17 +111,16 @@ private fun SettingsContent(
 ) {
     // Seed editable text fields once from the first loaded settings.
     var seeded by remember { mutableStateOf(false) }
-    var serverUrl by remember { mutableStateOf("") }
-    var username by remember { mutableStateOf("") }
-    var password by remember { mutableStateOf("") }
+    var apiKey by remember { mutableStateOf("") }
+    var baseUrl by remember { mutableStateOf("") }
     var systemPrompt by remember { mutableStateOf("") }
-    var showPassword by remember { mutableStateOf(false) }
+    var showApiKey by remember { mutableStateOf(false) }
+    var showAdvanced by remember { mutableStateOf(false) }
 
     LaunchedEffect(settings) {
         if (!seeded) {
-            serverUrl = settings.serverUrl
-            username = settings.authUsername
-            password = settings.authPassword
+            apiKey = settings.apiKey
+            baseUrl = settings.baseUrl
             systemPrompt = settings.systemPrompt
             seeded = true
         }
@@ -133,40 +132,40 @@ private fun SettingsContent(
             .padding(horizontal = 16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        SectionTitle("Server")
+        SectionTitle("API key")
         OutlinedTextField(
-            value = serverUrl,
-            onValueChange = { serverUrl = it; onUpdate { s -> s.copy(serverUrl = it) } },
-            label = { Text("Server URL") },
-            placeholder = { Text("https://ollama.example.com") },
+            value = apiKey,
+            onValueChange = { apiKey = it; onUpdate { s -> s.copy(apiKey = it) } },
+            label = { Text("API key") },
+            placeholder = { Text("sk-or-…") },
             singleLine = true,
-            supportingText = { Text("HTTPS is required for non-local hosts.") },
-            modifier = Modifier.fillMaxWidth(),
-        )
-        OutlinedTextField(
-            value = username,
-            onValueChange = { username = it; onUpdate { s -> s.copy(authUsername = it) } },
-            label = { Text("Basic auth username (optional)") },
-            singleLine = true,
-            modifier = Modifier.fillMaxWidth(),
-        )
-        OutlinedTextField(
-            value = password,
-            onValueChange = { password = it; onUpdate { s -> s.copy(authPassword = it) } },
-            label = { Text("Basic auth password (optional)") },
-            singleLine = true,
-            visualTransformation = if (showPassword) VisualTransformation.None else PasswordVisualTransformation(),
+            visualTransformation = if (showApiKey) VisualTransformation.None else PasswordVisualTransformation(),
             trailingIcon = {
-                TextButton(onClick = { showPassword = !showPassword }) {
-                    Text(if (showPassword) "Hide" else "Show")
+                TextButton(onClick = { showApiKey = !showApiKey }) {
+                    Text(if (showApiKey) "Hide" else "Show")
                 }
             },
+            supportingText = { Text("Sent as a bearer token; stored encrypted.") },
             modifier = Modifier.fillMaxWidth(),
         )
         Row(verticalAlignment = Alignment.CenterVertically) {
             Button(onClick = onTestConnection) { Text("Test connection") }
         }
         ConnectionStatusText(connection)
+
+        TextButton(onClick = { showAdvanced = !showAdvanced }) {
+            Text(if (showAdvanced) "Hide advanced" else "Advanced")
+        }
+        if (showAdvanced) {
+            OutlinedTextField(
+                value = baseUrl,
+                onValueChange = { baseUrl = it; onUpdate { s -> s.copy(baseUrl = it) } },
+                label = { Text("API base URL") },
+                supportingText = { Text("Any OpenAI-compatible endpoint. HTTPS is required for non-local hosts.") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
 
         HorizontalDivider()
 
@@ -186,6 +185,24 @@ private fun SettingsContent(
             },
             onSelect = { name -> onUpdate { it.copy(model = name) } },
         )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text("Web search", style = MaterialTheme.typography.bodyLarge)
+                Text(
+                    "Let the model search the web when needed (extra cost per search)",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Switch(
+                checked = settings.webSearch,
+                onCheckedChange = { onUpdate { s -> s.copy(webSearch = it) } },
+            )
+        }
 
         HorizontalDivider()
 

@@ -3,7 +3,7 @@ package com.chirp.core.model
 /**
  * A single turn in a conversation. This is the domain model used by the
  * [com.chirp.core.session.SessionController]; the persistence layer (Room) and
- * the network layer (Ollama DTOs) map to/from this type.
+ * the network layer (chat wire DTOs) map to/from this type.
  */
 data class Message(
     val id: Long = 0L,

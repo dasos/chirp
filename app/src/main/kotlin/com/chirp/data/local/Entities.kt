@@ -32,7 +32,7 @@ data class ConversationEntity(
 data class MessageEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0L,
     val conversationId: Long,
-    /** Stored as the Ollama wire name: "system" | "user" | "assistant". */
+    /** Stored as the chat wire name: "system" | "user" | "assistant". */
     val role: String,
     val text: String,
     val timestamp: Long,

@@ -6,10 +6,12 @@ in sync when architecture or conventions change.
 ## What this is
 
 **Chirp** — a native Android app (Kotlin + Jetpack Compose) for hands-free voice
-conversations with a self-hosted **Ollama** server. The loop: speak → on-device
-STT → stream the reply from Ollama → speak it back sentence-by-sentence → auto-
-listen again. Runs in a foreground service so it survives screen-off while walking
-with Bluetooth headphones. No custom backend — the app talks directly to Ollama.
+conversations with AI models via **OpenRouter** (default) or any OpenAI-compatible
+endpoint. The loop: speak → on-device STT → stream the reply from the chat backend →
+speak it back sentence-by-sentence → auto-listen again. Runs in a foreground service
+so it survives screen-off while walking with Bluetooth headphones. No custom backend —
+the app talks directly to `https://openrouter.ai/api/v1` (bearer key); the advanced
+base-URL setting points it at any OpenAI-compatible gateway (e.g. self-hosted LiteLLM).
 
 ## Build / test / run
 
@@ -35,12 +37,12 @@ Two Gradle modules — **respect the boundary**:
   interfaces the app implements. Must stay Android-free so it is JVM-unit-testable
   and reusable by the future `:wear` module.
   - `model/` `session/` `speech/` `chat/` `wear/` `util/`
-  - Key types: `SessionController` (the loop), `SentenceBuffer`, `OllamaStreamParser`,
+  - Key types: `SessionController` (the loop), `SentenceBuffer`, `OpenAiStreamParser`,
     the `SpeechToTextEngine`/`TextToSpeechEngine`/`ChatClient`/`ConversationStore`/
     `SettingsProvider` **interfaces**, and `WearContract` (Phase 2).
 - **`:app`** — Android. Implements the `:core` interfaces and adds everything
   framework-specific: `data/` (Room + EncryptedSharedPreferences), `network/`
-  (OkHttp Ollama client), `speech/` (SpeechRecognizer/TextToSpeech), `audio/`
+  (OkHttp OpenRouter/OpenAI-compatible client), `speech/` (SpeechRecognizer/TextToSpeech), `audio/`
   (focus + Bluetooth SCO + MediaSession), `service/` (foreground service +
   notification), `ui/` (Compose), `di/` (Hilt).
 
@@ -71,12 +73,15 @@ Two Gradle modules — **respect the boundary**:
 
 ## How the streaming ↔ TTS coupling works
 
-`OllamaChatClient` streams `/api/chat` NDJSON line-by-line (OkHttp + Okio) and maps
-each line with the pure `OllamaStreamParser`. Tokens feed `SentenceBuffer`, which
+`OpenRouterChatClient` streams `POST {base}/chat/completions` SSE line-by-line
+(OkHttp + Okio) and maps each `data:` line with the pure `OpenAiStreamParser`.
+Tokens feed `SentenceBuffer`, which
 emits a sentence as soon as a terminator is *confirmed* by trailing whitespace; a
 consumer coroutine speaks each sentence while streaming continues. **Retry-with-
-backoff happens only before the first token arrives** — Ollama can't resume a
+backoff happens only before the first token arrives** — the chat APIs can't resume a
 partial generation, so re-requesting mid-stream would duplicate already-spoken text.
+When web search is enabled, the request adds OpenRouter's `openrouter:web_search`
+server tool; search runs server-side and never interrupts the token stream.
 
 ## Conventions
 
@@ -89,7 +94,7 @@ partial generation, so re-requesting mid-stream would duplicate already-spoken t
   `collectAsStateWithLifecycle`.
 - **Compose Material 3 only** — no Material 2, no AppCompat. Dynamic color + dark
   mode via `ui/theme/ChirpTheme`.
-- Secrets (basic-auth password) live only in `SettingsRepository`
+- Secrets (the API key) live only in `SettingsRepository`
   (EncryptedSharedPreferences) — never plain prefs, never logs.
 - Versions in `gradle/libs.versions.toml` are a **compatible set** (Kotlin / KSP /
   Compose-compiler / AGP / Hilt / Room). Bump them together, not piecemeal.
@@ -115,7 +120,7 @@ partial generation, so re-requesting mid-stream would duplicate already-spoken t
 
 ## Tests to keep green
 
-- `core/src/test`: `SentenceBufferTest`, `OllamaStreamParserTest`,
+- `core/src/test`: `SentenceBufferTest`, `OpenAiStreamParserTest`,
   `SessionControllerTest` (fakes + `StandardTestDispatcher`).
 - `app/src/androidTest`: `ConversationDaoTest`.
 

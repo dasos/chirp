@@ -1,16 +1,17 @@
 # Contributing to Chirp
 
 Thanks for your interest! Chirp is a native Android app for hands-free voice chats
-with a self-hosted Ollama server. This guide covers local setup and the conventions
-the project follows.
+with AI models via OpenRouter (or any OpenAI-compatible endpoint). This guide covers
+local setup and the conventions the project follows.
 
 ## Prerequisites
 
 - **JDK 17**
 - **Android SDK** with platform **35** (Android Studio Ladybug or newer recommended)
 - A device or emulator (min SDK 26) for running the app and instrumentation tests
-- A reachable Ollama server to actually talk to (see the [README](README.md) for a
-  Caddy + HTTPS + Basic Auth reverse-proxy example)
+- An **OpenRouter API key** to actually talk to a model (create one at
+  [openrouter.ai/keys](https://openrouter.ai/keys)) — or any reachable
+  OpenAI-compatible endpoint (see the [README](README.md) gateway notes)
 
 ## Getting started
 
@@ -35,7 +36,7 @@ create it manually for headless CLI builds if needed.
 Two Gradle modules:
 
 - **`:core`** — pure Kotlin/JVM (no Android). The session state machine, the
-  STT/TTS/chat interfaces, the sentence buffer, the Ollama parser, and the Wear
+  STT/TTS/chat interfaces, the sentence buffer, the SSE stream parser, and the Wear
   contract. Unit-tested here.
 - **`:app`** — Android. Implements the `:core` interfaces and adds UI, the
   foreground service, audio/Bluetooth routing, persistence, and DI.
@@ -51,7 +52,7 @@ See [AGENTS.md](AGENTS.md) for the architecture invariants and gotchas, and the
   binding; don't reach around them.
 - All session control flows through `ConversationService` action intents → the
   singleton `SessionController`. Add new control paths as service actions.
-- Secrets (basic-auth password) belong only in `SettingsRepository`
+- Secrets (the API key) belong only in `SettingsRepository`
   (EncryptedSharedPreferences). Never log them.
 - Centralize dependency versions in `gradle/libs.versions.toml`; bump the
   Kotlin/KSP/Compose-compiler/AGP/Hilt/Room set together.
@@ -59,7 +60,7 @@ See [AGENTS.md](AGENTS.md) for the architecture invariants and gotchas, and the
 ## Before opening a pull request
 
 1. `./gradlew :core:test` passes (add/extend tests for logic changes — especially
-   the sentence buffer, the Ollama parser, and the session loop).
+   the sentence buffer, the SSE parser, and the session loop).
 2. `./gradlew assembleDebug` compiles.
 3. If you touched the Room schema, add a real `Migration` (don't rely on the
    destructive fallback in shipped builds).
@@ -70,6 +71,6 @@ CI (GitHub Actions) runs `:core:test` and `assembleDebug` on every push and PR.
 
 ## Reporting issues
 
-Please include your device/Android version, the Ollama model and server setup
-(proxy? HTTPS? Basic Auth?), and logs from `adb logcat` where relevant. Don't paste
-real credentials.
+Please include your device/Android version, the selected model and endpoint setup
+(OpenRouter? self-hosted gateway? HTTPS?), and logs from `adb logcat` where relevant.
+Don't paste real credentials.
