@@ -122,6 +122,16 @@ partial generation, so re-requesting mid-stream would duplicate already-spoken t
 When you change the loop, the sentence buffer, or the parser, update/extend these.
 CI (`.github/workflows/ci.yml`) runs `:core:test` and `assembleDebug` on push/PR.
 
+## Releases
+
+CI triggers only on `v*` tags. To make a release, tag the **specific commit** you want to ship **only when you're ready** — not after every merge:
+
+```bash
+git tag v0.2.0 && git push origin v0.2.0
+```
+
+This kicks off CI, which builds and auto-creates a GitHub Release with the APK attached + generated release notes. Do **not** tag for workflow-only changes (e.g. CI config) — those can be committed to `main` without triggering a build.
+
 ## Phase 2 (Wear OS) — architected, not built
 
 The watch is a thin remote that renders `SessionState` and sends `SessionCommand`s.
