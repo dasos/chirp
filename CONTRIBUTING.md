@@ -40,7 +40,7 @@ Two Gradle modules:
 - **`:app`** — Android. Implements the `:core` interfaces and adds UI, the
   foreground service, audio/Bluetooth routing, persistence, and DI.
 
-See [CLAUDE.md](CLAUDE.md) for the architecture invariants and gotchas, and the
+See [AGENTS.md](AGENTS.md) for the architecture invariants and gotchas, and the
 [README](README.md#architecture) for the annotated package tree.
 
 ## Conventions
@@ -63,7 +63,7 @@ See [CLAUDE.md](CLAUDE.md) for the architecture invariants and gotchas, and the
 2. `./gradlew assembleDebug` compiles.
 3. If you touched the Room schema, add a real `Migration` (don't rely on the
    destructive fallback in shipped builds).
-4. Update [README.md](README.md) and [CLAUDE.md](CLAUDE.md) if behavior or
+4. Update [README.md](README.md) and [AGENTS.md](AGENTS.md) if behavior or
    architecture changed.
 
 CI (GitHub Actions) runs `:core:test` and `assembleDebug` on every push and PR.

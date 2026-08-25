@@ -253,7 +253,7 @@ Phase 1 (everything above) is implemented end to end. Phase 2 (the Wear OS compa
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, conventions, and the PR checklist, and [CLAUDE.md](CLAUDE.md) for the architecture invariants and gotchas. In short: keep `:core` Android-free, route session control through the service, and run `./gradlew :core:test` before opening a PR.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, conventions, and the PR checklist, and [AGENTS.md](AGENTS.md) for the architecture invariants and gotchas. In short: keep `:core` Android-free, route session control through the service, and run `./gradlew :core:test` before opening a PR.
 
 ## License
 

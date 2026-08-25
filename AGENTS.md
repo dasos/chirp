@@ -1,4 +1,4 @@
-# CLAUDE.md
+# AGENTS.md
 
 Guidance for Claude Code (and humans) working in this repository. Keep this file
 in sync when architecture or conventions change.
