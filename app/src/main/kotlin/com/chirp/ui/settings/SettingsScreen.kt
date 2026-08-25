@@ -1,12 +1,16 @@
 package com.chirp.ui.settings
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -14,6 +18,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DockedSearchBar
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
@@ -21,6 +26,7 @@ import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MenuAnchorType
 import androidx.compose.material3.OutlinedTextField
@@ -43,8 +49,12 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.chirp.core.chat.ChatModel
 import com.chirp.data.settings.AppSettings
 import kotlin.math.roundToInt
+
+/** Cap on suggestion rows rendered by the model search field. */
+private const val MAX_MODELS_SHOWN = 100
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -83,7 +93,7 @@ fun SettingsScreen(
                 .fillMaxSize()
                 .padding(padding),
             settings = loaded,
-            models = models.map { it.id },
+            models = models,
             voices = voices,
             modelsLoading = modelsLoading,
             connection = connection,
@@ -100,7 +110,7 @@ fun SettingsScreen(
 private fun SettingsContent(
     modifier: Modifier,
     settings: AppSettings,
-    models: List<String>,
+    models: List<ChatModel>,
     voices: List<com.chirp.core.speech.TtsVoice>,
     modelsLoading: Boolean,
     connection: ConnectionUiState,
@@ -170,20 +180,12 @@ private fun SettingsContent(
         HorizontalDivider()
 
         SectionTitle("Model")
-        DropdownField(
-            label = "Model",
-            selected = settings.model.ifBlank { "Select a model" },
-            options = models,
-            trailing = {
-                IconButton(onClick = onLoadModels) {
-                    if (modelsLoading) {
-                        CircularProgressIndicator(modifier = Modifier.padding(4.dp), strokeWidth = 2.dp)
-                    } else {
-                        Icon(Icons.Filled.Refresh, contentDescription = "Refresh models")
-                    }
-                }
-            },
-            onSelect = { name -> onUpdate { it.copy(model = name) } },
+        ModelSearchField(
+            selected = models.firstOrNull { it.id == settings.model },
+            models = models,
+            modelsLoading = modelsLoading,
+            onLoadModels = onLoadModels,
+            onSelect = { onUpdate { s -> s.copy(model = it.id) } },
         )
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -316,6 +318,81 @@ private fun SliderRow(
             valueRange = range,
             steps = steps,
         )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ModelSearchField(
+    selected: ChatModel?,
+    models: List<ChatModel>,
+    modelsLoading: Boolean,
+    onLoadModels: () -> Unit,
+    onSelect: (ChatModel) -> Unit,
+) {
+    var active by remember { mutableStateOf(false) }
+    var query by remember { mutableStateOf("") }
+
+    LaunchedEffect(active, models, modelsLoading) {
+        if (active && models.isEmpty() && !modelsLoading) onLoadModels()
+    }
+
+    val filtered = remember(query, models) {
+        val q = query.trim()
+        val matches = if (q.isEmpty()) {
+            models
+        } else {
+            models.filter {
+                it.id.contains(q, ignoreCase = true) ||
+                    it.label?.contains(q, ignoreCase = true) == true
+            }
+        }
+        matches.take(MAX_MODELS_SHOWN)
+    }
+
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        // Show the current selection when collapsed; the raw query while searching.
+        val fieldText = if (active) query else selected?.let { it.label ?: it.id }.orEmpty()
+        DockedSearchBar(
+            query = fieldText,
+            onQueryChange = { query = it },
+            onSearch = {},
+            active = active,
+            onActiveChange = {
+                active = it
+                if (!it) query = ""
+            },
+            placeholder = { Text(if (selected == null) "Select a model" else "Search models") },
+            trailingIcon = {
+                IconButton(onClick = onLoadModels) {
+                    if (modelsLoading) {
+                        CircularProgressIndicator(modifier = Modifier.padding(4.dp), strokeWidth = 2.dp)
+                    } else {
+                        Icon(Icons.Filled.Refresh, contentDescription = "Refresh models")
+                    }
+                }
+            },
+            modifier = Modifier.weight(1f),
+        ) {
+            LazyColumn(Modifier.heightIn(max = 320.dp)) {
+                items(filtered, key = { it.id }) { model ->
+                    val label = model.label
+                    ListItem(
+                        headlineContent = { Text(label ?: model.id) },
+                        supportingContent = if (label != null && label != model.id) {
+                            { Text(model.id) }
+                        } else {
+                            null
+                        },
+                        modifier = Modifier.clickable {
+                            onSelect(model)
+                            active = false
+                            query = ""
+                        },
+                    )
+                }
+            }
+        }
     }
 }
 

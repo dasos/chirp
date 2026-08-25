@@ -163,7 +163,7 @@ All settings persist in `EncryptedSharedPreferences` (so the API key is encrypte
 |---|---|
 | API key | Sent as `Authorization: Bearer` on every request |
 | API base URL *(Advanced)* | Defaults to `https://openrouter.ai/api/v1`; any OpenAI-compatible endpoint |
-| Model | Fetched from `GET /models`; refreshable |
+| Model | Searchable picker, fetched from `GET /models`; refreshable |
 | Web search | Server-side grounding via OpenRouter's `openrouter:web_search` tool (extra cost per search) |
 | System prompt | Sent as the leading `system` message |
 | Speaking speed | TTS rate, 0.5×–2.0× |
