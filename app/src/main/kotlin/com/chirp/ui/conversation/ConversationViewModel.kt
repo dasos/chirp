@@ -40,10 +40,13 @@ class ConversationViewModel @Inject constructor(
     val state: StateFlow<SessionState> = controller.state
     val events: Flow<SessionEvent> = controller.events
 
-    // Prefer the active session's conversation id (covers the new-conversation case
-    // where the controller creates the row); otherwise show the one we navigated to.
+    // An existing conversation opened from Home must always use its route id.
+    // The controller is a singleton and retains the last active session id, so
+    // preferring controller.state here would make every Home row show that same
+    // most-recent conversation. For a new conversation (argId == null), use the
+    // controller id once the session creates it.
     private val effectiveId: StateFlow<Long?> = controller.state
-        .map { it.conversationId ?: argId }
+        .map { state -> argId ?: state.conversationId }
         .distinctUntilChanged()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), argId)
 
