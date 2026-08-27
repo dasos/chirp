@@ -91,6 +91,7 @@ class SettingsRepository @Inject constructor(
             putFloat(KEY_TTS_SPEED, updated.ttsSpeed)
             putString(KEY_TTS_VOICE, updated.ttsVoiceId)
             putBoolean(KEY_AUTO_LISTEN, updated.autoListen)
+            putBoolean(KEY_START_LISTENING_ON_NEW_CONVERSATION, updated.startListeningOnNewConversation)
             putLong(KEY_LISTEN_TIMEOUT, updated.listeningTimeoutMs)
             putBoolean(KEY_WEB_SEARCH, updated.webSearch)
         }.apply()
@@ -107,6 +108,10 @@ class SettingsRepository @Inject constructor(
         ttsSpeed = prefs.getFloat(KEY_TTS_SPEED, 1.0f),
         ttsVoiceId = prefs.getString(KEY_TTS_VOICE, null),
         autoListen = prefs.getBoolean(KEY_AUTO_LISTEN, true),
+        startListeningOnNewConversation = prefs.getBoolean(
+            KEY_START_LISTENING_ON_NEW_CONVERSATION,
+            true,
+        ),
         listeningTimeoutMs = prefs.getLong(KEY_LISTEN_TIMEOUT, 2_000L),
         webSearch = prefs.getBoolean(KEY_WEB_SEARCH, false),
     )
@@ -124,6 +129,7 @@ class SettingsRepository @Inject constructor(
         private const val KEY_TTS_SPEED = "tts_speed"
         private const val KEY_TTS_VOICE = "tts_voice"
         private const val KEY_AUTO_LISTEN = "auto_listen"
+        private const val KEY_START_LISTENING_ON_NEW_CONVERSATION = "start_listening_on_new_conversation"
         private const val KEY_LISTEN_TIMEOUT = "listen_timeout"
         private const val KEY_WEB_SEARCH = "web_search"
     }

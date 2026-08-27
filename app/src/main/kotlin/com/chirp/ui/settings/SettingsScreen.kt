@@ -262,10 +262,17 @@ private fun SettingsContent(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text("Auto-listen after each reply", style = MaterialTheme.typography.bodyLarge)
+            Column(modifier = Modifier.weight(1f)) {
+                Text("Start listening on new conversation", style = MaterialTheme.typography.bodyLarge)
+                Text(
+                    "Begin listening immediately after tapping New conversation",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
             Switch(
-                checked = settings.autoListen,
-                onCheckedChange = { onUpdate { s -> s.copy(autoListen = it) } },
+                checked = settings.startListeningOnNewConversation,
+                onCheckedChange = { onUpdate { s -> s.copy(startListeningOnNewConversation = it) } },
             )
         }
         SliderRow(

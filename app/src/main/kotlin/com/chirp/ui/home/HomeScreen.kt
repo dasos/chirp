@@ -3,6 +3,7 @@ package com.chirp.ui.home
 import android.text.format.DateUtils
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,7 +19,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExtendedFloatingActionButton
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
@@ -42,7 +43,7 @@ import com.chirp.core.model.Conversation
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
-    onNewConversation: () -> Unit,
+    onNewConversation: (startListening: Boolean) -> Unit,
     onOpenConversation: (Long) -> Unit,
     onOpenSettings: () -> Unit,
     viewModel: HomeViewModel = hiltViewModel(),
@@ -61,11 +62,13 @@ fun HomeScreen(
             )
         },
         floatingActionButton = {
-            ExtendedFloatingActionButton(
-                onClick = onNewConversation,
-                icon = { Icon(Icons.Filled.Mic, contentDescription = null) },
-                text = { Text("New conversation") },
-            )
+            FloatingActionButton(
+                onClick = { onNewConversation(viewModel.startListeningOnNewConversation.value) },
+                modifier = Modifier.size(80.dp),
+                shape = CircleShape,
+            ) {
+                Text("New")
+            }
         },
     ) { padding ->
         Column(

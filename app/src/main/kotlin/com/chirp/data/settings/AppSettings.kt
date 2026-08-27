@@ -10,6 +10,7 @@ data class AppSettings(
     val ttsSpeed: Float = 1.0f,
     val ttsVoiceId: String? = null,
     val autoListen: Boolean = true,
+    val startListeningOnNewConversation: Boolean = true,
     val listeningTimeoutMs: Long = 2_000L,
     val webSearch: Boolean = false,
 ) {
