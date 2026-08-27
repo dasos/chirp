@@ -50,6 +50,7 @@ import com.chirp.ui.components.MessageBubble
 import com.chirp.ui.components.MicStatusIndicator
 import com.chirp.ui.permissions.conversationPermissions
 import com.chirp.ui.permissions.hasMicPermission
+import com.chirp.ui.permissions.RequestBluetoothRationale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -70,11 +71,22 @@ fun ConversationScreen(
     // Starting the microphone foreground service requires RECORD_AUDIO on Android 14+,
     // so any session start (mic tap or typing while idle) is gated behind the permission.
     var pendingAction by remember { mutableStateOf<(() -> Unit)?>(null) }
+    var showPermissionRequest by remember { mutableStateOf(false) }
     val micPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions(),
     ) { _ ->
         if (context.hasMicPermission()) pendingAction?.invoke()
         pendingAction = null
+        showPermissionRequest = false
+    }
+
+    // On Android 12+, show a rationale dialog for BLUETOOTH_CONNECT before the system prompt.
+    if (showPermissionRequest && pendingAction != null) {
+        RequestBluetoothRationale(
+            onConfirmed = {
+                micPermissionLauncher.launch(conversationPermissions)
+            },
+        )
     }
 
     fun requireMicThen(action: () -> Unit) {
@@ -82,7 +94,7 @@ fun ConversationScreen(
             action()
         } else {
             pendingAction = action
-            micPermissionLauncher.launch(conversationPermissions)
+            showPermissionRequest = true
         }
     }
 
