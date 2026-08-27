@@ -20,6 +20,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DockedSearchBar
@@ -36,6 +37,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -64,9 +66,11 @@ fun OnboardingScreen(
     settingsRepository: SettingsRepository,
     chatClient: ChatClient,
     onComplete: (goToSettings: Boolean) -> Unit,
+    onOpenSettings: () -> Unit,
 ) {
     val scope = rememberCoroutineScope()
     val pagerState = rememberPagerState(pageCount = { PAGE_COUNT })
+    val savedSettings by settingsRepository.settings.collectAsState(initial = null)
 
     var currentPage by remember { mutableIntStateOf(0) }
     var apiKey by remember { mutableStateOf("") }
@@ -78,6 +82,10 @@ fun OnboardingScreen(
     var manualModelId by remember { mutableStateOf("") }
     var isManualEntry by remember { mutableStateOf(false) }
     var saving by remember { mutableStateOf(false) }
+
+    LaunchedEffect(savedSettings) {
+        if (apiKey.isBlank()) apiKey = savedSettings?.apiKey.orEmpty()
+    }
 
     LaunchedEffect(currentPage) {
         pagerState.animateScrollToPage(currentPage)
@@ -113,6 +121,7 @@ fun OnboardingScreen(
                             showApiKey = showApiKey,
                             onApiKeyChange = { apiKey = it },
                             onToggleShow = { showApiKey = !showApiKey },
+                            onOpenSettings = onOpenSettings,
                         )
                         1 -> ModelPage(
                             selectedModel = selectedModel,
@@ -237,7 +246,7 @@ fun OnboardingScreen(
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
                         OutlinedButton(
-                            onClick = { onComplete(false) },
+                            onClick = { onComplete(true) },
                             modifier = Modifier.weight(1f),
                         ) {
                             Text("More Settings")
@@ -261,6 +270,7 @@ private fun ApiKeyPage(
     showApiKey: Boolean,
     onApiKeyChange: (String) -> Unit,
     onToggleShow: () -> Unit,
+    onOpenSettings: () -> Unit,
 ) {
     Column(
         modifier = Modifier
@@ -300,7 +310,7 @@ private fun ApiKeyPage(
         OutlinedTextField(
             value = apiKey,
             onValueChange = onApiKeyChange,
-            label = { Text("API key") },
+            label = { Text("OpenRouter API key") },
             placeholder = { Text("sk-or-…") },
             singleLine = true,
             visualTransformation = if (showApiKey) VisualTransformation.None else PasswordVisualTransformation(),
@@ -310,10 +320,19 @@ private fun ApiKeyPage(
                 }
             },
             supportingText = {
-                Text("Get your key at openrouter.ai/keys. Sent as a bearer token; stored encrypted.")
+                Text("Get your key at openrouter.ai/keys.")
             },
             modifier = Modifier.fillMaxWidth(),
         )
+
+        Spacer(Modifier.height(16.dp))
+
+        TextButton(
+            onClick = onOpenSettings,
+            modifier = Modifier.align(Alignment.CenterHorizontally),
+        ) {
+            Text("Use a custom endpoint or other settings")
+        }
 
         Spacer(Modifier.height(24.dp))
     }
@@ -342,7 +361,7 @@ private fun ModelPage(
         Spacer(Modifier.height(32.dp))
 
         Text(
-            "Choose a Model",
+            "Choose a model",
             style = MaterialTheme.typography.headlineMedium,
             fontWeight = FontWeight.Bold,
             textAlign = TextAlign.Center,
@@ -406,7 +425,11 @@ private fun ModelPage(
                         if (modelsLoading) {
                             CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
                         } else {
-                            Text("Refresh")
+                            Icon(
+                                Icons.Filled.Refresh,
+                                contentDescription = "Refresh models",
+                                tint = MaterialTheme.colorScheme.primary,
+                            )
                         }
                     }
                 },

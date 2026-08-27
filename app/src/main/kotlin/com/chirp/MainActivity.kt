@@ -2,6 +2,7 @@ package com.chirp
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.Box
@@ -22,6 +23,7 @@ import com.chirp.data.settings.SettingsRepository
 import com.chirp.ui.navigation.ChirpNavHost
 import com.chirp.ui.navigation.Routes
 import com.chirp.ui.onboarding.OnboardingScreen
+import com.chirp.ui.settings.SettingsScreen
 import com.chirp.ui.permissions.RequestNotificationPermission
 import com.chirp.ui.theme.ChirpTheme
 import dagger.hilt.android.AndroidEntryPoint
@@ -59,29 +61,55 @@ private fun OnboardingGate(
 ) {
     val settings by settingsRepository.settings.collectAsState(initial = null)
     var onboardingDismissed by remember { mutableStateOf(false) }
+    var initialSettingsObserved by remember { mutableStateOf(false) }
     var navigateToSettings by remember { mutableStateOf(false) }
+    // True when the welcome screen's "custom endpoint / settings" link is open.
+    // Settings is shown as an overlay (rather than a nav destination) so the back
+    // button returns to the in-progress onboarding flow.
+    var settingsOverlay by remember { mutableStateOf(false) }
 
-    val needsOnboarding = settings != null &&
-        !onboardingDismissed &&
-        (settings!!.apiKey.isBlank() || settings!!.model.isBlank())
+    // On a fresh launch, skip onboarding when setup was already completed. During
+    // the current setup flow, however, keep it visible after page 1 saves the model
+    // so the final Done page can still be shown.
+    androidx.compose.runtime.LaunchedEffect(settings) {
+        if (!initialSettingsObserved && settings != null) {
+            onboardingDismissed = settings!!.apiKey.isNotBlank() && settings!!.model.isNotBlank()
+            initialSettingsObserved = true
+        }
+    }
 
-    if (needsOnboarding) {
-        navigateToSettings = false
-        OnboardingScreen(
-            settingsRepository = settingsRepository,
-            chatClient = chatClient,
-            onComplete = { goToSettings ->
-                navigateToSettings = goToSettings
-                onboardingDismissed = true
-            },
-        )
-    } else if (settings != null) {
-        ChirpNavHost(
-            startDestination = if (navigateToSettings) Routes.SETTINGS else Routes.HOME,
-        )
-    } else {
-        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            CircularProgressIndicator()
+    val showOnboarding = settings != null && !onboardingDismissed
+
+    Box(Modifier.fillMaxSize()) {
+        when {
+            showOnboarding -> {
+                navigateToSettings = false
+                OnboardingScreen(
+                    settingsRepository = settingsRepository,
+                    chatClient = chatClient,
+                    onComplete = { goToSettings ->
+                        navigateToSettings = goToSettings
+                        onboardingDismissed = true
+                    },
+                    onOpenSettings = { settingsOverlay = true },
+                )
+            }
+            settings != null -> {
+                ChirpNavHost(
+                    startDestination = Routes.HOME,
+                    startInSettings = navigateToSettings,
+                )
+            }
+            else -> {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator()
+                }
+            }
+        }
+
+        if (settingsOverlay) {
+            BackHandler { settingsOverlay = false }
+            SettingsScreen(onBack = { settingsOverlay = false })
         }
     }
 }
