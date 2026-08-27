@@ -259,22 +259,34 @@ fun submitText(text: String) = control {
 
         var finalText: String? = null
         var error: SttError? = null
-        try {
-            stt.listen(SttConfig(silenceTimeoutMs = s.listeningTimeoutMs)).collect { event ->
-                when (event) {
-                    is SttEvent.PartialResult -> _state.update { it.copy(partialTranscript = event.text) }
-                    is SttEvent.RmsChanged -> _state.update { it.copy(rms = event.rms) }
-                    is SttEvent.FinalResult -> finalText = event.text
-                    is SttEvent.Error -> error = event.type
-                    SttEvent.ReadyForSpeech,
-                    SttEvent.BeginningOfSpeech,
-                    SttEvent.EndOfSpeech -> Unit
+        var remainingRetries = 1 // one transient retry for audio errors
+        while (remainingRetries >= 0) {
+            error = null
+            finalText = null
+            try {
+                stt.listen(SttConfig(silenceTimeoutMs = s.listeningTimeoutMs)).collect { event ->
+                    when (event) {
+                        is SttEvent.PartialResult -> _state.update { it.copy(partialTranscript = event.text) }
+                        is SttEvent.RmsChanged -> _state.update { it.copy(rms = event.rms) }
+                        is SttEvent.FinalResult -> finalText = event.text
+                        is SttEvent.Error -> error = event.type
+                        SttEvent.ReadyForSpeech,
+                        SttEvent.BeginningOfSpeech,
+                        SttEvent.EndOfSpeech -> Unit
+                    }
                 }
+            } catch (c: CancellationException) {
+                throw c
+            } catch (_: Throwable) {
+                error = SttError.UNKNOWN
             }
-        } catch (c: CancellationException) {
-            throw c
-        } catch (_: Throwable) {
-            error = SttError.UNKNOWN
+
+            if (error == SttError.AUDIO && remainingRetries > 0) {
+                remainingRetries--
+                delay(1_000L)
+                continue
+            }
+            break
         }
 
         _events.tryEmit(SessionEvent.ListeningStopped)

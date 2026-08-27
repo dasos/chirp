@@ -8,6 +8,7 @@ import android.os.Looper
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
+import android.util.Log
 import com.chirp.core.speech.SpeechToTextEngine
 import com.chirp.core.speech.SttConfig
 import com.chirp.core.speech.SttError
@@ -39,6 +40,8 @@ class AndroidSpeechToText @Inject constructor(
             return@callbackFlow
         }
 
+        Log.d(TAG, "listen: starting speech recognition with silenceTimeout=${config.silenceTimeoutMs}ms")
+
         val mainHandler = Handler(Looper.getMainLooper())
         var recognizer: SpeechRecognizer? = null
 
@@ -62,6 +65,7 @@ class AndroidSpeechToText @Inject constructor(
             }
 
             override fun onError(error: Int) {
+                Log.w(TAG, "onError: code=$error (${errorCodeName(error)})")
                 trySend(SttEvent.Error(mapError(error)))
                 close()
             }
@@ -128,5 +132,23 @@ class AndroidSpeechToText @Inject constructor(
         SpeechRecognizer.ERROR_CLIENT -> SttError.CLIENT
         SpeechRecognizer.ERROR_SERVER -> SttError.SERVER
         else -> SttError.UNKNOWN
+    }
+
+    private fun errorCodeName(error: Int): String = when (error) {
+        SpeechRecognizer.ERROR_NO_MATCH -> "NO_MATCH"
+        SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> "SPEECH_TIMEOUT"
+        SpeechRecognizer.ERROR_NETWORK -> "NETWORK"
+        SpeechRecognizer.ERROR_NETWORK_TIMEOUT -> "NETWORK_TIMEOUT"
+        SpeechRecognizer.ERROR_AUDIO -> "AUDIO"
+        SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> "PERMISSION"
+        SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> "BUSY"
+        SpeechRecognizer.ERROR_CLIENT -> "CLIENT"
+        SpeechRecognizer.ERROR_SERVER -> "SERVER"
+        SpeechRecognizer.ERROR_LANGUAGE_NOT_SUPPORTED -> "LANGUAGE_NOT_SUPPORTED"
+        else -> "UNKNOWN($error)"
+    }
+
+    companion object {
+        private const val TAG = "AndroidSpeechToText"
     }
 }

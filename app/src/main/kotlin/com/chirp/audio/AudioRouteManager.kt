@@ -9,6 +9,7 @@ import android.media.AudioDeviceInfo
 import android.media.AudioFocusRequest
 import android.media.AudioManager
 import android.os.Build
+import android.util.Log
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -46,6 +47,14 @@ class AudioRouteManager @Inject constructor(
     }
 
     private val focusListener = AudioManager.OnAudioFocusChangeListener { change ->
+        val changeName = when (change) {
+            AudioManager.AUDIOFOCUS_GAIN -> "GAIN"
+            AudioManager.AUDIOFOCUS_LOSS -> "LOSS"
+            AudioManager.AUDIOFOCUS_LOSS_TRANSIENT -> "LOSS_TRANSIENT"
+            AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> "LOSS_TRANSIENT_CAN_DUCK"
+            else -> "UNKNOWN($change)"
+        }
+        Log.d(TAG, "focusChange: $changeName")
         when (change) {
             AudioManager.AUDIOFOCUS_LOSS -> focusCallback?.onFocusLost()
             AudioManager.AUDIOFOCUS_LOSS_TRANSIENT,
@@ -58,11 +67,13 @@ class AudioRouteManager @Inject constructor(
     fun startSession(callback: FocusCallback): Boolean {
         focusCallback = callback
         val granted = requestFocus()
+        Log.d(TAG, "startSession: focusGranted=$granted")
         routeToBluetoothIfAvailable()
         return granted
     }
 
     fun endSession() {
+        Log.d(TAG, "endSession")
         stopBluetoothRouting()
         abandonFocus()
         focusCallback = null
@@ -98,9 +109,12 @@ class AudioRouteManager @Inject constructor(
                 .firstOrNull { it.type == AudioDeviceInfo.TYPE_BLUETOOTH_SCO }
             if (device != null) {
                 audioManager.mode = AudioManager.MODE_IN_COMMUNICATION
-                _scoActive.value = runCatching { audioManager.setCommunicationDevice(device) }.getOrDefault(false)
+                val ok = runCatching { audioManager.setCommunicationDevice(device) }.getOrDefault(false)
+                _scoActive.value = ok
+                Log.d(TAG, "routeToBluetoothIfAvailable: setCommunicationDevice(${device}) -> $ok")
             } else {
                 _scoActive.value = false
+                Log.d(TAG, "routeToBluetoothIfAvailable: no SCO device found")
             }
         } else {
             legacyStartSco()
@@ -157,5 +171,9 @@ class AudioRouteManager @Inject constructor(
     private fun unregisterScoReceiver() {
         scoReceiver?.let { runCatching { context.unregisterReceiver(it) } }
         scoReceiver = null
+    }
+
+    companion object {
+        private const val TAG = "AudioRouteManager"
     }
 }
