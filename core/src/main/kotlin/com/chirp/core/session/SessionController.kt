@@ -109,6 +109,10 @@ class SessionController @Inject constructor(
 
     fun start(conversationId: Long?) = control {
         val s = settingsProvider.current().also { settings = it }
+        if (s.model.isBlank()) {
+            emitError("No model configured. Open settings and select a model.")
+            return@control
+        }
         if (!ttsInitialized) {
             ttsInitialized = runCatching { tts.init() }.getOrDefault(false)
             if (!ttsInitialized) emitError("Text-to-speech unavailable")
@@ -173,12 +177,15 @@ class SessionController @Inject constructor(
         restartLoopLocked()
     }
 
-    fun submitText(text: String) = control {
+fun submitText(text: String) = control {
         val trimmed = text.trim()
         if (trimmed.isEmpty()) return@control
         if (!running) {
-            // Allow text-only use without having tapped the mic first.
             val s = settingsProvider.current().also { settings = it }
+            if (s.model.isBlank()) {
+                emitError("No model configured. Open settings and select a model.")
+                return@control
+            }
             if (!ttsInitialized) ttsInitialized = runCatching { tts.init() }.getOrDefault(false)
             applyTtsSettings(s)
             conversationId = conversationId ?: store.createConversation(s.model, s.systemPrompt)

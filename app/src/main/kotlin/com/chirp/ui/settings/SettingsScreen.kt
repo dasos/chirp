@@ -125,7 +125,6 @@ private fun SettingsContent(
     var baseUrl by remember { mutableStateOf("") }
     var systemPrompt by remember { mutableStateOf("") }
     var showApiKey by remember { mutableStateOf(false) }
-    var showAdvanced by remember { mutableStateOf(false) }
 
     LaunchedEffect(settings) {
         if (!seeded) {
@@ -142,7 +141,12 @@ private fun SettingsContent(
             .padding(horizontal = 16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        SectionTitle("API key")
+        SectionTitle("OpenRouter / API Connection")
+        Text(
+            "Chirp connects to OpenRouter by default. Enter your OpenRouter API key below, or change the Base URL for a different provider.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
         OutlinedTextField(
             value = apiKey,
             onValueChange = { apiKey = it; onUpdate { s -> s.copy(apiKey = it) } },
@@ -160,22 +164,25 @@ private fun SettingsContent(
         )
         Row(verticalAlignment = Alignment.CenterVertically) {
             Button(onClick = onTestConnection) { Text("Test connection") }
+            if (settings.model.isBlank()) {
+                Text(
+                    "Select a model first",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.padding(start = 8.dp),
+                )
+            }
         }
         ConnectionStatusText(connection)
 
-        TextButton(onClick = { showAdvanced = !showAdvanced }) {
-            Text(if (showAdvanced) "Hide advanced" else "Advanced")
-        }
-        if (showAdvanced) {
-            OutlinedTextField(
-                value = baseUrl,
-                onValueChange = { baseUrl = it; onUpdate { s -> s.copy(baseUrl = it) } },
-                label = { Text("API base URL") },
-                supportingText = { Text("Any OpenAI-compatible endpoint. HTTPS is required for non-local hosts.") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
-            )
-        }
+        OutlinedTextField(
+            value = baseUrl,
+            onValueChange = { baseUrl = it; onUpdate { s -> s.copy(baseUrl = it) } },
+            label = { Text("API base URL") },
+            supportingText = { Text("Any OpenAI-compatible endpoint. Defaults to OpenRouter. Use https:// for remote hosts.") },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth(),
+        )
 
         HorizontalDivider()
 
@@ -187,6 +194,13 @@ private fun SettingsContent(
             onLoadModels = onLoadModels,
             onSelect = { onUpdate { s -> s.copy(model = it.id) } },
         )
+        if (settings.model.isBlank()) {
+            Text(
+                "Select a model before starting a conversation",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+            )
+        }
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,

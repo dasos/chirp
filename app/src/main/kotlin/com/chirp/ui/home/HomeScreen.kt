@@ -1,17 +1,25 @@
 package com.chirp.ui.home
 
 import android.text.format.DateUtils
+
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -30,6 +38,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -46,6 +55,7 @@ fun HomeScreen(
     viewModel: HomeViewModel = hiltViewModel(),
 ) {
     val conversations by viewModel.conversations.collectAsStateWithLifecycle()
+    val hasAuth by viewModel.hasAuth.collectAsStateWithLifecycle()
 
     Scaffold(
         topBar = {
@@ -66,19 +76,25 @@ fun HomeScreen(
             )
         },
     ) { padding ->
-        if (conversations.isEmpty()) {
-            EmptyState(Modifier.fillMaxSize().padding(padding))
-        } else {
-            LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = padding,
-            ) {
-                items(conversations, key = { it.id }) { conversation ->
-                    ConversationRow(
-                        conversation = conversation,
-                        onClick = { onOpenConversation(conversation.id) },
-                        onDelete = { viewModel.delete(conversation.id) },
-                    )
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding),
+        ) {
+            if (!hasAuth) {
+                ApiKeyWarning(onOpenSettings = onOpenSettings)
+            }
+            if (conversations.isEmpty()) {
+                EmptyState(Modifier.fillMaxSize())
+            } else {
+                LazyColumn(modifier = Modifier.fillMaxSize()) {
+                    items(conversations, key = { it.id }) { conversation ->
+                        ConversationRow(
+                            conversation = conversation,
+                            onClick = { onOpenConversation(conversation.id) },
+                            onDelete = { viewModel.delete(conversation.id) },
+                        )
+                    }
                 }
             }
         }
@@ -146,6 +162,34 @@ private fun ConversationRow(
                 }
             },
             modifier = Modifier.clickable(onClick = onClick),
+        )
+    }
+}
+
+@Composable
+private fun ApiKeyWarning(onOpenSettings: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .background(MaterialTheme.colorScheme.errorContainer)
+            .clickable(onClick = onOpenSettings)
+            .padding(12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            Icons.Filled.Info,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onErrorContainer,
+            modifier = Modifier.size(24.dp),
+        )
+        Spacer(Modifier.size(8.dp))
+        Text(
+            "No API key configured — tap here to add your OpenRouter key",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onErrorContainer,
+            modifier = Modifier.weight(1f),
         )
     }
 }
