@@ -125,6 +125,15 @@ fun ConversationScreen(
                     }
                 },
                 actions = {
+                    if (state.active) {
+                        IconButton(onClick = viewModel::endSession) {
+                            Icon(
+                                Icons.Filled.Stop,
+                                contentDescription = "Stop session",
+                                tint = MaterialTheme.colorScheme.error,
+                            )
+                        }
+                    }
                     IconButton(onClick = onOpenSettings) {
                         Icon(Icons.Filled.Settings, contentDescription = "Settings")
                     }

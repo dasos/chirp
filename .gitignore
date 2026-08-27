@@ -14,3 +14,4 @@ local.properties
 
 # Claude Code personal/local settings (keep secrets & machine-specific perms out of the repo)
 .claude/settings.local.json
+chirp.png

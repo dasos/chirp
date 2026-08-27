@@ -14,6 +14,8 @@ import com.chirp.core.session.SessionPhase
 import com.chirp.core.session.SessionController
 import com.chirp.speech.AndroidTextToSpeech
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -39,6 +41,7 @@ class ConversationService : LifecycleService() {
     private var started = false
     private var lastPhase: SessionPhase? = null
     private var lastNotifyAt = 0L
+    private var idleTimeoutJob: Job? = null
 
     private val focusCallback = object : AudioRouteManager.FocusCallback {
         override fun onFocusLost() = controller.pause()
@@ -112,6 +115,20 @@ class ConversationService : LifecycleService() {
                     return@collect
                 }
 
+                // Auto-stop after a period of idle inactivity.
+                if (started && state.active) {
+                    val idlePhase = state.phase == SessionPhase.PAUSED || state.phase == SessionPhase.ERROR
+                    if (idlePhase && idleTimeoutJob == null) {
+                        idleTimeoutJob = lifecycleScope.launch {
+                            delay(IDLE_TIMEOUT_MS)
+                            if (started) stopSession()
+                        }
+                    } else if (!idlePhase) {
+                        idleTimeoutJob?.cancel()
+                        idleTimeoutJob = null
+                    }
+                }
+
                 // Throttle notification updates (partial text changes rapidly while streaming).
                 val now = SystemClock.elapsedRealtime()
                 if (state.phase != lastPhase || now - lastNotifyAt > NOTIFY_THROTTLE_MS) {
@@ -164,6 +181,9 @@ class ConversationService : LifecycleService() {
 
         private const val NOTIFICATION_ID = 1001
         private const val NOTIFY_THROTTLE_MS = 300L
+
+        /** After the conversation pauses naturally, wait this long before auto-stopping. */
+        private const val IDLE_TIMEOUT_MS = 30_000L
 
         /** Build an intent for a control action; used by the UI/ViewModel. */
         fun intent(context: Context, action: String): Intent =
