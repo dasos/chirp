@@ -29,6 +29,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -101,6 +102,12 @@ fun ConversationScreen(
     }
 
     val onMic = { requireMicThen { viewModel.onMicTap() } }
+
+    LaunchedEffect(viewModel.shouldStartListening) {
+        if (viewModel.shouldStartListening) {
+            requireMicThen { viewModel.onMicTap() }
+        }
+    }
 
     val onSend: () -> Unit = {
         val text = input

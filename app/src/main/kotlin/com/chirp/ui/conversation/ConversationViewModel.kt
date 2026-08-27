@@ -36,6 +36,8 @@ class ConversationViewModel @Inject constructor(
 
     /** Conversation id from navigation; null for a brand-new conversation. */
     private val argId: Long? = savedStateHandle.get<Long>(Routes.ARG_CONVERSATION_ID)?.takeIf { it >= 0 }
+    val shouldStartListening =
+        argId == null && savedStateHandle.get<Boolean>(Routes.ARG_START_LISTENING) == true
 
     val state: StateFlow<SessionState> = controller.state
     val events: Flow<SessionEvent> = controller.events
