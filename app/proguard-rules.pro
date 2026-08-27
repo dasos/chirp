@@ -17,3 +17,9 @@
 
 # Hilt and Room generate code; the plugins add their own rules, these are guards.
 -keep class * extends androidx.room.RoomDatabase { <init>(); }
+
+# Optional annotations referenced by Google Tink; not packaged at runtime.
+-dontwarn com.google.errorprone.annotations.CanIgnoreReturnValue
+-dontwarn com.google.errorprone.annotations.CheckReturnValue
+-dontwarn com.google.errorprone.annotations.Immutable
+-dontwarn com.google.errorprone.annotations.RestrictedApi
