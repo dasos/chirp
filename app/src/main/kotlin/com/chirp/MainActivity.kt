@@ -82,6 +82,14 @@ private fun OnboardingGate(
 
     Box(Modifier.fillMaxSize()) {
         when {
+            // Wait until the first settings value has been observed before
+            // selecting the initial screen. This prevents a configured user from
+            // seeing onboarding for one composition during app startup.
+            !initialSettingsObserved -> {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator()
+                }
+            }
             showOnboarding -> {
                 navigateToSettings = false
                 OnboardingScreen(
