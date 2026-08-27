@@ -45,8 +45,16 @@ class ConversationService : LifecycleService() {
 
     private val focusCallback = object : AudioRouteManager.FocusCallback {
         override fun onFocusLost() = controller.pause()
-        override fun onTransientLoss() = controller.pause()
-        override fun onFocusGained() = controller.resume()
+        // SpeechRecognizer itself briefly takes mic focus while listening — the
+        // system delivers a transient loss when recognition starts and a gain
+        // when it stops. Treating those as pause/resume cancels the in-flight
+        // recognition, which releases the mic, which triggers a gain, which
+        // restarts recognition — a self-sustaining focus flap (see logcat:
+        // LOSS_TRANSIENT/GAIN alternating every millisecond). So ignore
+        // transient loss/gain; only a permanent loss parks the session (the
+        // user re-taps the mic to resume).
+        override fun onTransientLoss() = Unit
+        override fun onFocusGained() = Unit
     }
 
     private val mediaCallback = object : MediaSessionController.Callback {

@@ -293,6 +293,13 @@ fun submitText(text: String) = control {
         _state.update { it.copy(rms = 0f) }
 
         return when {
+            error == SttError.NO_MATCH || error == SttError.SPEECH_TIMEOUT -> {
+                // These are normal no-speech outcomes, not microphone failures.
+                // Let the existing retry/auto-listen policy handle them instead
+                // of speaking "I had trouble hearing you".
+                handleNoMatch(s)
+                null
+            }
             error != null -> {
                 handleSttError(error!!, s)
                 null
