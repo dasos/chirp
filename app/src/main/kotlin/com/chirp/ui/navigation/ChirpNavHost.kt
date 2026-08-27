@@ -22,8 +22,11 @@ object Routes {
 }
 
 @Composable
-fun ChirpNavHost(navController: NavHostController = rememberNavController()) {
-    NavHost(navController = navController, startDestination = Routes.HOME) {
+fun ChirpNavHost(
+    navController: NavHostController = rememberNavController(),
+    startDestination: String = Routes.HOME,
+) {
+    NavHost(navController = navController, startDestination = startDestination) {
         composable(Routes.HOME) {
             HomeScreen(
                 onNewConversation = { navController.navigate(Routes.conversation(null)) },
