@@ -2,6 +2,8 @@ package com.chirp.ui.conversation
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -225,7 +227,7 @@ fun ConversationScreen(
                     placeholder = { Text("Type instead of speaking…") },
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
-                    keyboardActions = KeyboardActions(onSend = onSend),
+                    keyboardActions = KeyboardActions(onSend = { onSend() }),
                     modifier = Modifier.weight(1f),
                 )
                 IconButton(
