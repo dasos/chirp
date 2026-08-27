@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Settings
@@ -64,10 +65,14 @@ fun HomeScreen(
         floatingActionButton = {
             FloatingActionButton(
                 onClick = { onNewConversation(viewModel.startListeningOnNewConversation.value) },
-                modifier = Modifier.size(80.dp),
+                modifier = Modifier.size(72.dp),
                 shape = CircleShape,
             ) {
-                Text("New")
+                Icon(
+                    Icons.Filled.Add,
+                    contentDescription = "New conversation",
+                    modifier = Modifier.size(36.dp),
+                )
             }
         },
     ) { padding ->
