@@ -54,6 +54,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.chirp.R
 import com.chirp.core.chat.ChatClient
 import com.chirp.core.chat.ChatModel
 import com.chirp.data.settings.SettingsRepository
