@@ -111,7 +111,10 @@ server tool; search runs server-side and never interrupts the token stream.
   (`AndroidSpeechToText` posts to the main `Handler`). Don't call it off-main.
 - Bluetooth: SCO stays on for the whole session (mic-routing priority). TTS routing
   switches between `USAGE_VOICE_COMMUNICATION` (SCO) and `USAGE_MEDIA` (no headset)
-  via `AudioRouteManager.scoActive` → `AndroidTextToSpeech.applyCommunicationRouting`.
+  via `AudioRouteManager.isBluetoothHeadsetConnected()` →
+  `AndroidTextToSpeech.applyCommunicationRouting`. The system can drop SCO at
+  screen-off; `AudioRouteManager.reassertCommunicationRoute()` re-applies the voice
+  link (the service calls it at each LISTENING/SPEAKING phase boundary).
 - HTTPS for non-local hosts is enforced in **code** (`network/AuthInterceptor`), not
   just the manifest. `res/xml/network_security_config.xml` permits cleartext as a
   base config for local dev; the real enforcement is the interceptor.

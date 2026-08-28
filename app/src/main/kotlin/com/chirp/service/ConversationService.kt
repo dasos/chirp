@@ -69,7 +69,6 @@ class ConversationService : LifecycleService() {
         super.onCreate()
         notifications.createChannel()
         observeState()
-        observeScoRouting()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -123,6 +122,21 @@ class ConversationService : LifecycleService() {
                     return@collect
                 }
 
+                // At each transition into the mic (LISTENING) or the speaker
+                // (SPEAKING), re-apply routing: re-assert the voice link (the
+                // system may drop SCO at screen-off even while the headset stays
+                // connected) and pick TTS output usage from durable headset
+                // presence — not live link state — so the audio mode never
+                // flaps mid-session. When there is no headset, TTS plays as media
+                // via the loudspeaker and nothing here changes.
+                val phase = state.phase
+                if (phase != lastPhase &&
+                    (phase == SessionPhase.LISTENING || phase == SessionPhase.SPEAKING)
+                ) {
+                    audioRouteManager.reassertCommunicationRoute()
+                    tts.applyCommunicationRouting(audioRouteManager.isBluetoothHeadsetConnected())
+                }
+
                 // Auto-stop after a period of idle inactivity.
                 if (started && state.active) {
                     val idlePhase = state.phase == SessionPhase.PAUSED || state.phase == SessionPhase.ERROR
@@ -144,16 +158,6 @@ class ConversationService : LifecycleService() {
                     lastPhase = state.phase
                     lastNotifyAt = now
                 }
-            }
-        }
-    }
-
-    private fun observeScoRouting() {
-        lifecycleScope.launch {
-            audioRouteManager.scoActive.collect { scoActive ->
-                // Route TTS over the SCO voice link when a headset is connected,
-                // otherwise play it as media (so it's loud on the phone speaker).
-                tts.applyCommunicationRouting(scoActive)
             }
         }
     }
