@@ -16,14 +16,14 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @HiltViewModel
@@ -42,15 +42,25 @@ class ConversationViewModel @Inject constructor(
     val state: StateFlow<SessionState> = controller.state
     val events: Flow<SessionEvent> = controller.events
 
-    // An existing conversation opened from Home must always use its route id.
-    // The controller is a singleton and retains the last active session id, so
-    // preferring controller.state here would make every Home row show that same
-    // most-recent conversation. For a new conversation (argId == null), use the
-    // controller id once the session creates it.
-    private val effectiveId: StateFlow<Long?> = controller.state
-        .map { state -> argId ?: state.conversationId }
-        .distinctUntilChanged()
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), argId)
+    // An existing conversation opened from Home always uses its route id. A screen
+    // opened as "new" adopts the id created for its active session and retains it
+    // after End, so typing or tapping the mic continues that conversation instead
+    // of creating another one. Do not initialize from the singleton controller's
+    // inactive state: it may still contain an id from a previously viewed screen.
+    private val effectiveId = MutableStateFlow(argId)
+
+    init {
+        if (argId == null) {
+            viewModelScope.launch {
+                controller.state.collect { state ->
+                    if (state.active && effectiveId.value == null) {
+                        effectiveId.value = state.conversationId
+                        savedStateHandle[Routes.ARG_CONVERSATION_ID] = state.conversationId
+                    }
+                }
+            }
+        }
+    }
 
     @OptIn(ExperimentalCoroutinesApi::class)
     val messages: StateFlow<List<Message>> = effectiveId
@@ -67,14 +77,13 @@ class ConversationViewModel @Inject constructor(
         if (!state.value.active) {
             ContextCompat.startForegroundService(
                 appContext,
-                ConversationService.startIntent(appContext, argId),
+                ConversationService.startIntent(appContext, effectiveId.value),
             )
         } else {
             sendAction(ConversationService.ACTION_PRIMARY)
         }
     }
 
-    fun stopSpeaking() = sendAction(ConversationService.ACTION_STOP_SPEAKING)
     fun endSession() = sendAction(ConversationService.ACTION_STOP)
 
     fun sendText(text: String) {
@@ -83,7 +92,7 @@ class ConversationViewModel @Inject constructor(
         if (!state.value.active) {
             ContextCompat.startForegroundService(
                 appContext,
-                ConversationService.startIntent(appContext, argId, trimmed),
+                ConversationService.startIntent(appContext, effectiveId.value, trimmed),
             )
         } else {
             appContext.startService(ConversationService.submitTextIntent(appContext, trimmed))

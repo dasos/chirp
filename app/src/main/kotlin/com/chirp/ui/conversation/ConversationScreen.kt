@@ -2,13 +2,13 @@ package com.chirp.ui.conversation
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -21,7 +21,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -133,15 +132,6 @@ fun ConversationScreen(
                     }
                 },
                 actions = {
-                    if (state.active) {
-                        IconButton(onClick = viewModel::endSession) {
-                            Icon(
-                                Icons.Filled.Stop,
-                                contentDescription = "Stop session",
-                                tint = MaterialTheme.colorScheme.error,
-                            )
-                        }
-                    }
                     IconButton(onClick = onOpenSettings) {
                         Icon(Icons.Filled.Settings, contentDescription = "Settings")
                     }
@@ -211,12 +201,26 @@ fun ConversationScreen(
                 modifier = Modifier.align(Alignment.CenterHorizontally),
             )
 
-            ControlsRow(
-                active = state.active,
-                speaking = state.phase == SessionPhase.SPEAKING,
-                onStopSpeaking = viewModel::stopSpeaking,
-                onEnd = viewModel::endSession,
-            )
+            if (state.active) {
+                TextButton(
+                    onClick = viewModel::endSession,
+                    modifier = Modifier
+                        .align(Alignment.CenterHorizontally)
+                        .padding(bottom = 4.dp),
+                ) {
+                    Icon(
+                        Icons.Filled.Stop,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.size(18.dp),
+                    )
+                    Text(
+                        "End",
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.padding(start = 2.dp),
+                    )
+                }
+            }
 
             Row(
                 modifier = Modifier
@@ -240,31 +244,6 @@ fun ConversationScreen(
                     Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Send")
                 }
             }
-        }
-    }
-}
-
-@Composable
-private fun ControlsRow(
-    active: Boolean,
-    speaking: Boolean,
-    onStopSpeaking: () -> Unit,
-    onEnd: () -> Unit,
-) {
-    if (!active) return
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 4.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        if (speaking) {
-            OutlinedButton(onClick = onStopSpeaking) { Text("Stop speaking") }
-        }
-        TextButton(onClick = onEnd) {
-            Icon(Icons.Filled.Stop, contentDescription = null)
-            Text("End")
         }
     }
 }
