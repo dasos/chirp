@@ -2,6 +2,7 @@ package com.chirp.ui.conversation
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -41,6 +42,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -52,6 +54,31 @@ import com.chirp.ui.components.MicStatusIndicator
 import com.chirp.ui.permissions.conversationPermissions
 import com.chirp.ui.permissions.hasMicPermission
 import com.chirp.ui.permissions.RequestBluetoothRationale
+
+/**
+ * Like [Arrangement.Top] but pins the last item to the bottom of the viewport
+ * when the content is shorter than the visible area. For a new conversation the
+ * only item is the mic controls, so this keeps the big button at the bottom of
+ * the screen (right above the typing row) instead of stranded at the top. Once
+ * the transcript fills the screen it behaves like a normal list.
+ */
+private val TopWithFooter = object : Arrangement.Vertical {
+    override fun Density.arrange(
+        totalSize: Int,
+        sizes: IntArray,
+        outPositions: IntArray,
+    ) {
+        var y = 0
+        sizes.forEachIndexed { index, size ->
+            outPositions[index] = y
+            y += size
+        }
+        if (y < totalSize) {
+            val lastIndex = outPositions.lastIndex
+            outPositions[lastIndex] = totalSize - sizes.last()
+        }
+    }
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -116,10 +143,15 @@ fun ConversationScreen(
     // Haptics on listen start/stop.
     LaunchedEffectEvents(viewModel.events, haptics)
 
-    // Keep the transcript pinned to the latest message / streaming text.
+    // Keep the transcript pinned to the latest message / streaming text. The last
+    // item is the session controls; the typing row is pinned below the list so it
+    // stays visible above the keyboard without any IME scrolling.
+    val lastItemIndex = {
+        val count = conversationItemCount(messages.size, state.phase, state.partialResponse, state.partialTranscript)
+        if (count > 0) count - 1 else -1
+    }
     androidx.compose.runtime.LaunchedEffect(messages.size, state.partialResponse, state.partialTranscript) {
-        val count = visibleItemCount(messages.size, state.phase, state.partialResponse, state.partialTranscript)
-        if (count > 0) listState.animateScrollToItem(count - 1)
+        if (lastItemIndex() >= 0) listState.animateScrollToItem(lastItemIndex())
     }
 
     Scaffold(
@@ -150,78 +182,84 @@ fun ConversationScreen(
                     .fillMaxWidth()
                     .weight(1f),
                 state = listState,
+                verticalArrangement = TopWithFooter,
             ) {
-                items(
-                    items = messages.filter { it.role != Role.SYSTEM },
-                    key = { it.id },
-                ) { message ->
-                    MessageBubble(role = message.role, text = message.text)
-                }
+            items(
+                items = messages.filter { it.role != Role.SYSTEM },
+                key = { it.id },
+            ) { message ->
+                MessageBubble(role = message.role, text = message.text)
+            }
 
-                // Live streaming assistant bubble.
-                if (state.partialResponse.isNotBlank() &&
-                    (state.phase == SessionPhase.THINKING || state.phase == SessionPhase.SPEAKING)
-                ) {
-                    item(key = "partial-assistant") {
-                        MessageBubble(role = Role.ASSISTANT, text = state.partialResponse, dimmed = true)
+            // Live streaming assistant bubble.
+            if (state.partialResponse.isNotBlank() &&
+                (state.phase == SessionPhase.THINKING || state.phase == SessionPhase.SPEAKING)
+            ) {
+                item(key = "partial-assistant") {
+                    MessageBubble(role = Role.ASSISTANT, text = state.partialResponse, dimmed = true)
+                }
+            }
+
+            // Live partial transcript while listening.
+            if (state.phase == SessionPhase.LISTENING && state.partialTranscript.isNotBlank()) {
+                item(key = "partial-user") {
+                    MessageBubble(role = Role.USER, text = state.partialTranscript, dimmed = true)
+                }
+            }
+
+                // Session controls scroll with the transcript instead of being pinned.
+                item(key = "session-controls") {
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
+                        if (state.phase == SessionPhase.ERROR && state.errorMessage != null) {
+                            Text(
+                                text = state.errorMessage!!,
+                                color = MaterialTheme.colorScheme.error,
+                                style = MaterialTheme.typography.bodyMedium,
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                            )
+                        }
+
+                        MicStatusIndicator(
+                            phase = state.phase,
+                            rms = state.rms,
+                            thinkingStartedAtMillis = state.thinkingStartedAtMillis,
+                            onTap = onMic,
+                            modifier = Modifier.padding(vertical = 8.dp),
+                        )
+
+                        Text(
+                            text = statusLabel(state.phase),
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+
+                        if (state.active) {
+                            TextButton(
+                                onClick = viewModel::endSession,
+                                modifier = Modifier.padding(bottom = 4.dp),
+                            ) {
+                                Icon(
+                                    Icons.Filled.Stop,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.error,
+                                    modifier = Modifier.size(18.dp),
+                                )
+                                Text(
+                                    "End",
+                                    color = MaterialTheme.colorScheme.error,
+                                    modifier = Modifier.padding(start = 2.dp),
+                                )
+                            }
+                        }
                     }
                 }
-
-                // Live partial transcript while listening.
-                if (state.phase == SessionPhase.LISTENING && state.partialTranscript.isNotBlank()) {
-                    item(key = "partial-user") {
-                        MessageBubble(role = Role.USER, text = state.partialTranscript, dimmed = true)
-                    }
-                }
             }
 
-            if (state.phase == SessionPhase.ERROR && state.errorMessage != null) {
-                Text(
-                    text = state.errorMessage!!,
-                    color = MaterialTheme.colorScheme.error,
-                    style = MaterialTheme.typography.bodyMedium,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
-                )
-            }
-
-            MicStatusIndicator(
-                phase = state.phase,
-                rms = state.rms,
-                thinkingStartedAtMillis = state.thinkingStartedAtMillis,
-                onTap = onMic,
-                modifier = Modifier
-                    .align(Alignment.CenterHorizontally)
-                    .padding(vertical = 8.dp),
-            )
-
-            Text(
-                text = statusLabel(state.phase),
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.align(Alignment.CenterHorizontally),
-            )
-
-            if (state.active) {
-                TextButton(
-                    onClick = viewModel::endSession,
-                    modifier = Modifier
-                        .align(Alignment.CenterHorizontally)
-                        .padding(bottom = 4.dp),
-                ) {
-                    Icon(
-                        Icons.Filled.Stop,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.error,
-                        modifier = Modifier.size(18.dp),
-                    )
-                    Text(
-                        "End",
-                        color = MaterialTheme.colorScheme.error,
-                        modifier = Modifier.padding(start = 2.dp),
-                    )
-                }
-            }
-
+            // Typing row stays pinned below the list so it's always visible above
+            // the keyboard — the IME pushes it up via Column.imePadding().
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -273,7 +311,7 @@ private fun statusLabel(phase: SessionPhase): String = when (phase) {
     SessionPhase.ERROR -> "Tap the mic to retry"
 }
 
-private fun visibleItemCount(
+private fun conversationItemCount(
     messageCount: Int,
     phase: SessionPhase,
     partialResponse: String,
@@ -282,5 +320,6 @@ private fun visibleItemCount(
     var count = messageCount
     if (partialResponse.isNotBlank() && (phase == SessionPhase.THINKING || phase == SessionPhase.SPEAKING)) count++
     if (phase == SessionPhase.LISTENING && partialTranscript.isNotBlank()) count++
-    return count
+    // Trailing session-controls item.
+    return count + 1
 }

@@ -108,12 +108,12 @@ fun MicStatusIndicator(
         else -> 1f
     }
 
-    Box(modifier = modifier.size(180.dp), contentAlignment = Alignment.Center) {
+    Box(modifier = modifier.size(160.dp), contentAlignment = Alignment.Center) {
         Surface(
             shape = CircleShape,
             color = ringColor(phase),
             modifier = Modifier
-                .size(160.dp)
+                .size(140.dp)
                 .scale(ringScale)
                 .alpha(0.22f),
         ) {}
@@ -123,7 +123,7 @@ fun MicStatusIndicator(
             shape = CircleShape,
             color = coreColor(phase),
             contentColor = MaterialTheme.colorScheme.onPrimary,
-            modifier = Modifier.size(116.dp),
+            modifier = Modifier.size(100.dp),
         ) {
             Box(contentAlignment = Alignment.Center) {
                 when (phase) {
@@ -131,7 +131,7 @@ fun MicStatusIndicator(
                     else -> Icon(
                         imageVector = iconFor(phase),
                         contentDescription = phase.name,
-                        modifier = Modifier.size(44.dp),
+                        modifier = Modifier.size(40.dp),
                     )
                 }
             }
