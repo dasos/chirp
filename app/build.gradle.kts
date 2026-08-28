@@ -11,12 +11,21 @@ android {
     namespace = "com.chirp"
     compileSdk = 35
 
+    signingConfigs {
+        create("ci") {
+            storeFile = file("signing/debug.keystore")
+            storePassword = "android"
+            keyAlias = "chirp"
+            keyPassword = "android"
+        }
+    }
+
     defaultConfig {
         applicationId = "com.chirp"
         minSdk = 26
         targetSdk = 35
-        versionCode = 4
-        versionName = "0.5.0"
+        versionCode = 5
+        versionName = "0.5.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
@@ -24,6 +33,7 @@ android {
 
     buildTypes {
         debug {
+            signingConfig = signingConfigs.getByName("ci")
             isMinifyEnabled = false
         }
         release {
