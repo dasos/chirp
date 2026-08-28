@@ -372,6 +372,7 @@ class SessionController @Inject constructor(
         val sentences = Channel<String>(Channel.UNLIMITED)
         var failed = false
 
+        var streamCompleted = false
         coroutineScope {
             val speaker = launch {
                 for (sentence in sentences) {
@@ -390,17 +391,23 @@ class SessionController @Inject constructor(
                     sentenceBuffer.append(token).forEach { sentences.send(it) }
                 }
                 sentenceBuffer.flush()?.let { sentences.send(it) }
+                streamCompleted = true
             } catch (c: CancellationException) {
                 // Interrupted mid-reply (big button, stop-speaking, or End):
                 // persist whatever was received rather than losing it.
-                persistPartialOnInterrupt(convId, full.toString(), s)
+                persistPartialOnInterrupt(convId, full.toString(), s, streamCompleted = streamCompleted)
                 throw c
             } catch (_: Throwable) {
                 failed = true
             } finally {
                 sentences.close()
             }
-            speaker.join()
+            try {
+                speaker.join()
+            } catch (c: CancellationException) {
+                persistPartialOnInterrupt(convId, full.toString(), s, streamCompleted = streamCompleted)
+                throw c
+            }
         }
 
         val assistantText = full.toString()
@@ -537,16 +544,21 @@ class SessionController @Inject constructor(
         restartLoopLocked()
     }
 
-    private fun markInterrupted(text: String): String {
+    private fun markInterrupted(text: String, isFullText: Boolean): String {
         val trimmed = text.trim()
         if (trimmed.isEmpty()) return ""
-        return "$trimmed …"
+        return if (isFullText) trimmed else "$trimmed …"
     }
 
     /** Persists the partial reply on interrupt (best-effort, detached from the cancelled loop). */
-    private fun persistPartialOnInterrupt(convId: Long, partial: String, s: SessionSettings) {
+    private fun persistPartialOnInterrupt(
+        convId: Long,
+        partial: String,
+        s: SessionSettings,
+        streamCompleted: Boolean = false,
+    ) {
         if (partial.isBlank() || !saveOnInterrupt) return
-        val text = markInterrupted(partial)
+        val text = markInterrupted(partial, isFullText = streamCompleted)
         if (text.isBlank()) return
         scope.launch {
             runCatching {

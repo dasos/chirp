@@ -21,7 +21,7 @@ import kotlinx.coroutines.flow.flow
 
 /** Test doubles for [SessionController] unit tests. */
 
-class FakeChatClient(
+open class FakeChatClient(
     var tokens: List<String> = emptyList(),
     var failAlways: Boolean = false,
     var models: List<ChatModel> = emptyList(),
@@ -49,7 +49,7 @@ class FakeSpeechToText(var script: List<SttEvent> = emptyList()) : SpeechToTextE
     }
 }
 
-class FakeTextToSpeech : TextToSpeechEngine {
+open class FakeTextToSpeech : TextToSpeechEngine {
     val spoken = mutableListOf<String>()
     var initResult = true
     override suspend fun init(): Boolean = initResult

@@ -300,4 +300,36 @@ class SessionControllerTest {
 
         controller.shutdown()
     }
+
+    @Test
+    fun `interrupt while stream completed but tts is speaking persists full text without ellipsis`() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val store = FakeConversationStore()
+        val chat = FakeChatClient(tokens = listOf("Full", " answer", " completed."))
+        val tts = object : FakeTextToSpeech() {
+            override suspend fun speak(text: String, utteranceId: String) {
+                super.speak(text, utteranceId)
+                awaitCancellation()
+            }
+        }
+        val controller = newController(
+            dispatcher, chat, tts = tts, store = store,
+            settings = SessionSettings(model = "m", systemPrompt = null, autoListen = true),
+        )
+
+        controller.start(null)
+        advanceUntilIdle()
+        controller.submitText("Type a question")
+        advanceUntilIdle()
+        assertEquals(SessionPhase.SPEAKING, controller.state.value.phase)
+
+        controller.stop()
+        advanceUntilIdle()
+
+        val assistant = store.messages.first { it.role == Role.ASSISTANT }
+        assertEquals("Full answer completed.", assistant.text)
+        assertFalse(assistant.text.endsWith("…"))
+
+        controller.shutdown()
+    }
 }
