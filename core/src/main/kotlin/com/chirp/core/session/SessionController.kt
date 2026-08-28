@@ -3,6 +3,7 @@ package com.chirp.core.session
 import com.chirp.core.chat.ChatClient
 import com.chirp.core.chat.ChatRequestSpec
 import com.chirp.core.chat.ChatStreamEvent
+import com.chirp.core.model.Conversation
 import com.chirp.core.model.Message
 import com.chirp.core.model.Role
 import com.chirp.core.speech.SentenceBuffer
@@ -375,6 +376,7 @@ fun submitText(text: String) = control {
         if (assistantText.isNotBlank()) {
             store.appendMessage(convId, Role.ASSISTANT, assistantText)
         }
+        maybeGenerateTitle(convId, s)
 
         if (failed) {
             val msg = "Connection lost"
@@ -457,6 +459,22 @@ fun submitText(text: String) = control {
         return buildList {
             if (system != null) add(Message(role = Role.SYSTEM, text = system))
             addAll(stored)
+        }
+    }
+
+    private fun maybeGenerateTitle(convId: Long, s: SessionSettings) {
+        scope.launch {
+            runCatching {
+                val messages = store.loadMessages(convId)
+                val userCount = messages.count { it.role == Role.USER }
+                if (userCount == 1) {
+                    val rawTitle = chatClient.generateTitle(messages, s.model)
+                    if (!rawTitle.isNullOrBlank()) {
+                        val sanitized = Conversation.sanitizeTitle(rawTitle)
+                        store.updateTitle(convId, sanitized)
+                    }
+                }
+            }
         }
     }
 

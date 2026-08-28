@@ -3,6 +3,7 @@ package com.chirp.network
 import com.chirp.core.chat.ChatClient
 import com.chirp.core.chat.ChatCompletionChunk
 import com.chirp.core.chat.ChatCompletionRequest
+import com.chirp.core.chat.ChatCompletionResponse
 import com.chirp.core.chat.ChatException
 import com.chirp.core.chat.ChatJson
 import com.chirp.core.chat.ChatModel
@@ -14,6 +15,7 @@ import com.chirp.core.chat.OpenAiStreamParser
 import com.chirp.core.chat.StreamOptions
 import com.chirp.core.chat.WireMessage
 import com.chirp.core.chat.WireTool
+import com.chirp.core.model.Message
 import com.chirp.data.settings.ConnectionConfigHolder
 import com.chirp.core.util.DispatcherProvider
 import kotlinx.coroutines.CancellationException
@@ -120,6 +122,37 @@ class OpenRouterChatClient @Inject constructor(
         }
     }
 
+    override suspend fun generateTitle(messages: List<Message>, model: String): String? =
+        withContext(dispatchers.io) {
+            runCatching {
+                val base = requireBaseUrl()
+                val wireMessages = listOf(
+                    WireMessage(role = "system", content = TITLE_SYSTEM_PROMPT),
+                ) + messages.map { WireMessage(it.role.wireName, it.text) }
+                val payload = ChatCompletionRequest(
+                    model = model,
+                    messages = wireMessages,
+                    stream = false,
+                    temperature = 0.7,
+                )
+                val request = Request.Builder()
+                    .url("$base/chat/completions")
+                    .post(ChatJson.encodeToString(payload).toRequestBody(JSON_MEDIA_TYPE))
+                    .header("HTTP-Referer", SITE_URL)
+                    .header("X-Title", SITE_TITLE)
+                    .build()
+                client.newCall(request).execute().use { response ->
+                    if (!response.isSuccessful) return@use null
+                    val body = response.body?.string().orEmpty()
+                    ChatJson.decodeFromString<ChatCompletionResponse>(body)
+                        .choices.firstOrNull()
+                        ?.message
+                        ?.content
+                        ?.takeIf { it.isNotBlank() }
+                }
+            }.getOrNull()
+        }
+
     override suspend fun testConnection(): ConnectionResult = withContext(dispatchers.io) {
         val config = connectionHolder.config
         if (config.baseUrl.isBlank()) return@withContext ConnectionResult.Failure("Server URL is not set.")
@@ -166,6 +199,10 @@ class OpenRouterChatClient @Inject constructor(
 
         /** OpenRouter server tool that lets the model search the web when useful. */
         private const val WEB_SEARCH_TOOL = "openrouter:web_search"
+
+        /** Instructs the model to produce a short, clean conversation title. */
+        private const val TITLE_SYSTEM_PROMPT =
+            "Write a concise title for this conversation, 3-6 words, plain text, no quotes or punctuation."
 
         /** Optional attribution headers OpenRouter asks clients to send. */
         private const val SITE_URL = "https://github.com/dasos/chirp"

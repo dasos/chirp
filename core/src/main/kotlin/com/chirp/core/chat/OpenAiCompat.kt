@@ -66,6 +66,23 @@ data class WireChoice(
     @SerialName("finish_reason") val finishReason: String? = null,
 )
 
+/** Non-streaming response: `choices[0].message.content`. */
+@Serializable
+data class ChatCompletionResponse(
+    val choices: List<WireResponseChoice> = emptyList(),
+)
+
+@Serializable
+data class WireResponseChoice(
+    val message: WireResponseMessage = WireResponseMessage(),
+)
+
+@Serializable
+data class WireResponseMessage(
+    val role: String? = null,
+    val content: String? = null,
+)
+
 @Serializable
 data class WireDelta(
     val content: String? = null,

@@ -1,5 +1,6 @@
 package com.chirp.core.chat
 
+import com.chirp.core.model.Message
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -22,6 +23,13 @@ interface ChatClient {
 
     /** Fetches available models from `GET {base}/models`. */
     suspend fun listModels(): List<ChatModel>
+
+    /**
+     * Asks the model to summarize the given opening messages into a short
+     * conversation title. Returns the raw title, or `null` on any failure so
+     * callers can keep their fallback. Implementations must not throw.
+     */
+    suspend fun generateTitle(messages: List<Message>, model: String): String?
 
     /** Lightweight reachability/auth check used by Settings → "Test connection". */
     suspend fun testConnection(): ConnectionResult

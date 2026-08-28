@@ -68,6 +68,9 @@ class ConversationRepository @Inject constructor(
     override suspend fun loadMessages(conversationId: Long): List<Message> =
         messageDao.getByConversation(conversationId).map { it.toDomain() }
 
+    override suspend fun updateTitle(conversationId: Long, title: String) =
+        conversationDao.updateTitle(conversationId, title)
+
     suspend fun deleteConversation(id: Long) = conversationDao.deleteById(id)
 
     private fun previewOf(text: String): String =

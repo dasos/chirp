@@ -25,7 +25,9 @@ class FakeChatClient(
     var tokens: List<String> = emptyList(),
     var failAlways: Boolean = false,
     var models: List<ChatModel> = emptyList(),
+    var title: String? = null,
 ) : ChatClient {
+    var titleRequests = 0
     override fun streamChat(spec: ChatRequestSpec): Flow<ChatStreamEvent> = flow {
         if (failAlways) throw ChatException("boom")
         tokens.forEach { emit(ChatStreamEvent.Token(it)) }
@@ -33,6 +35,10 @@ class FakeChatClient(
     }
 
     override suspend fun listModels(): List<ChatModel> = models
+    override suspend fun generateTitle(messages: List<Message>, model: String): String? {
+        titleRequests++
+        return title
+    }
     override suspend fun testConnection(): ConnectionResult = ConnectionResult.Success(null, models.size)
 }
 
@@ -85,6 +91,13 @@ class FakeConversationStore : ConversationStore {
 
     override suspend fun loadMessages(conversationId: Long): List<Message> =
         messages.filter { it.conversationId == conversationId }
+
+    override suspend fun updateTitle(conversationId: Long, title: String) {
+        val index = conversations.indexOfFirst { it.id == conversationId }
+        if (index >= 0) {
+            conversations[index] = conversations[index].copy(title = title)
+        }
+    }
 }
 
 class FakeSettingsProvider(var settings: SessionSettings) : SettingsProvider {

@@ -20,6 +20,9 @@ interface ConversationStore {
      *  conversation title from the first user message and bump `updatedAt`. */
     suspend fun appendMessage(conversationId: Long, role: Role, text: String): Long
 
+    /** Sets the conversation title (used for LLM-generated titles). */
+    suspend fun updateTitle(conversationId: Long, title: String)
+
     /** Loads the full transcript ordered oldest-first. */
     suspend fun loadMessages(conversationId: Long): List<Message>
 }

@@ -1,6 +1,7 @@
 package com.chirp.core.session
 
 import com.chirp.core.chat.ChatClient
+import com.chirp.core.model.Conversation
 import com.chirp.core.model.Role
 import com.chirp.core.speech.SpeechToTextEngine
 import com.chirp.core.util.Clock
@@ -120,5 +121,46 @@ class SessionControllerTest {
         assertEquals("Connection lost", tts.spoken.last())
 
         controller.shutdown()
+    }
+
+    @Test
+    fun `first turn triggers title generation and updates store`() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val store = FakeConversationStore()
+        val chat = FakeChatClient(
+            tokens = listOf("Paris is the capital of France."),
+            title = "\"Capital of France\"",
+        )
+        val controller = newController(
+            dispatcher, chat, store = store,
+            settings = SessionSettings(model = "m", systemPrompt = null, autoListen = false),
+        )
+
+        controller.start(null)
+        advanceUntilIdle()
+
+        controller.submitText("What is the capital of France?")
+        advanceUntilIdle()
+
+        assertEquals(1, chat.titleRequests)
+        assertEquals("Capital of France", store.conversations.first().title)
+
+        // Second turn does not re-trigger title generation
+        controller.submitText("Tell me more")
+        advanceUntilIdle()
+        assertEquals(1, chat.titleRequests)
+
+        controller.shutdown()
+    }
+
+    @Test
+    fun `sanitizeTitle strips quotes and clamps length`() {
+        assertEquals("Capital of France", Conversation.sanitizeTitle("\"Capital of France\""))
+        assertEquals("Capital of France", Conversation.sanitizeTitle("  'Capital of France.'  "))
+        assertEquals("Capital of France", Conversation.sanitizeTitle("**Capital of France:**"))
+        assertEquals("New conversation", Conversation.sanitizeTitle(""))
+        assertEquals("New conversation", Conversation.sanitizeTitle("   "))
+        assertEquals("A".repeat(50), Conversation.sanitizeTitle("A".repeat(50)))
+        assertEquals("A".repeat(50) + "…", Conversation.sanitizeTitle("A".repeat(60)))
     }
 }

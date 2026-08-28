@@ -23,5 +23,24 @@ data class Conversation(
                 cleaned.take(maxLength).trimEnd() + "…"
             }
         }
+
+        /** Clean up an LLM-generated title: strip quotes/markdown/punctuation and clamp length. */
+        fun sanitizeTitle(raw: String, maxLength: Int = 50): String {
+            var cleaned = raw.trim()
+            if (cleaned.isEmpty()) return DEFAULT_TITLE
+            // Strip surrounding quotes (straight or curly) and markdown emphasis.
+            cleaned = cleaned
+                .trim('"', '\u201C', '\u201D', '\'', '\u2018', '\u2019', '*', '_', '`')
+                .trim()
+            // Drop trailing punctuation.
+            cleaned = cleaned.trimEnd('.', '!', '?', ':', ';', ',', '-', '—')
+            cleaned = cleaned.trim().replace(Regex("\\s+"), " ")
+            if (cleaned.isEmpty()) return DEFAULT_TITLE
+            return if (cleaned.length <= maxLength) {
+                cleaned
+            } else {
+                cleaned.take(maxLength).trimEnd() + "…"
+            }
+        }
     }
 }
