@@ -181,7 +181,7 @@ private fun EmptyState(modifier: Modifier) {
             modifier = Modifier.padding(top = 12.dp),
         )
         Text(
-            "Tap “New conversation” and start talking.",
+            "Tap + to start a new conversation.",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(top = 4.dp),
