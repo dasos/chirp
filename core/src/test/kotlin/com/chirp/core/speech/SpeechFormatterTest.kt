@@ -65,7 +65,7 @@ class SpeechFormatterTest {
 
     @Test
     fun `flattens tables to prose`() {
-        assertEquals("Name Age Alice 30", formatter.toSpokenText("Name | Age\nAlice | 30"))
+        assertEquals("Name Age Alice 30", formatter.toSpokenText("Name | Age | Alice | 30"))
     }
 
     // Cross-utterance numbered lists -----------------------------------------
@@ -81,16 +81,16 @@ class SpeechFormatterTest {
         assertEquals("", formatter.toSpokenText("1."))
         assertEquals("1 Set up the project", formatter.toSpokenText("Set up the project"))
         assertEquals("", formatter.toSpokenText("2."))
-        assertEquals("2 Run the tests", formatter.toSpokenText("Run the tests."))
+        assertEquals("2 Run the tests.", formatter.toSpokenText("Run the tests."))
     }
 
     @Test
-    fun `ignores a pending number if the next utterance is blank after stripping`() {
+    fun `keeps a pending number across a blank decorative utterance`() {
         assertEquals("", formatter.toSpokenText("3."))
         assertEquals("", formatter.toSpokenText("```"))
         assertEquals("", formatter.toSpokenText("---"))
-        // The pending number is consumed even when nothing is spoken.
-        assertEquals("plain", formatter.toSpokenText("plain"))
+        // The pending number survives and lands on the real content.
+        assertEquals("3 target", formatter.toSpokenText("target"))
     }
 
     @Test

@@ -70,7 +70,7 @@ fun MessageBubble(
             tonalElevation = 1.dp,
             modifier = Modifier.widthIn(max = 320.dp),
         ) {
-            Text(
+            MarkdownText(
                 text = text,
                 style = MaterialTheme.typography.bodyLarge,
                 modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),

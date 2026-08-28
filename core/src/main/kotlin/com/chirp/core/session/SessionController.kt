@@ -10,6 +10,7 @@ import com.chirp.core.speech.SentenceBuffer
 import com.chirp.core.speech.SpeechToTextEngine
 import com.chirp.core.speech.SttConfig
 import com.chirp.core.speech.SttError
+import com.chirp.core.speech.SpeechFormatter
 import com.chirp.core.speech.SttEvent
 import com.chirp.core.speech.TextToSpeechEngine
 import com.chirp.core.speech.TtsException
@@ -37,6 +38,17 @@ import kotlinx.coroutines.sync.withLock
 import java.util.concurrent.atomic.AtomicLong
 import javax.inject.Inject
 import javax.inject.Singleton
+
+/**
+ * Best-effort instruction appended to every chat request so the model replies in
+ * prose that reads naturally when spoken. This is a nudge only — on-device
+ * enforcement happens in [com.chirp.core.speech.SpeechFormatter].
+ */
+const val SPOKEN_OUTPUT_INSTRUCTION: String =
+    "Speak as if reading aloud: reply in plain spoken text with no markup of any " +
+        "kind — no Markdown, no asterisks, underscores, tildes or backticks, no " +
+        "headings, no bullet or numbered lists, no code blocks, no tables, and no " +
+        "link syntax like [text](url). Use natural sentences and normal punctuation."
 
 /**
  * The hands-free conversation loop, kept in pure :core so it is unit-testable
@@ -368,6 +380,7 @@ class SessionController @Inject constructor(
         )
 
         val sentenceBuffer = SentenceBuffer()
+        val speechFormatter = SpeechFormatter()
         val full = StringBuilder()
         val sentences = Channel<String>(Channel.UNLIMITED)
         var failed = false
@@ -377,10 +390,14 @@ class SessionController @Inject constructor(
             val speaker = launch {
                 for (sentence in sentences) {
                     ensureSpeakingPhase()
+                    // UI keeps the raw markdown; only what reaches TTS is sanitized.
                     _events.tryEmit(SessionEvent.AssistantSentence(sentence))
                     if (ttsInitialized) {
-                        runCatching { tts.speak(sentence, nextUtteranceId()) }
-                            .onFailure { if (it is CancellationException) throw it }
+                        val spoken = speechFormatter.toSpokenText(sentence)
+                        if (spoken.isNotBlank()) {
+                            runCatching { tts.speak(spoken, nextUtteranceId()) }
+                                .onFailure { if (it is CancellationException) throw it }
+                        }
                     }
                 }
             }
@@ -496,6 +513,10 @@ class SessionController @Inject constructor(
         val system = s.systemPrompt?.takeIf { it.isNotBlank() }
         return buildList {
             if (system != null) add(Message(role = Role.SYSTEM, text = system))
+            // Best-effort nudge to produce spoken prose; [SpeechFormatter] is the
+            // real enforcement at the TTS boundary. A separate system message so a
+            // user-supplied prompt is never rewritten.
+            add(Message(role = Role.SYSTEM, text = SPOKEN_OUTPUT_INSTRUCTION))
             addAll(stored)
         }
     }

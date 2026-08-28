@@ -39,6 +39,7 @@ class SpeechFormatter {
         }
 
         val cleaned = stripMarkdown(raw).trim()
+        if (cleaned.isEmpty()) return "" // decorative noise (fence, HR, …) — say nothing, keep any pending number
         val number = pendingListNumber
         pendingListNumber = -1
         val prefixed = if (number > 0) "$number $cleaned" else cleaned
@@ -61,13 +62,13 @@ class SpeechFormatter {
         out = CodeFence.replace(out, "")        // ``` / ```kotlin fence lines
         out = HorizontalRule.replace(out, "")   // "---", "***" lines
         out = Escape.replace(out, "$1")         // \* -> *  (eaten next anyway)
-        out = EmphasisDelimiters.remove(out)    // **, *, __, _, ~~, ` all dropped
+        out = EmphasisDelimiters.replace(out, "") // **, *, __, _, ~~, ` all dropped
         out = TablePipe.replace(out, " ")       // "a | b" -> "a b"
         return out
     }
 
     private companion object {
-        val ListNumberOnly = Regex("""\d{1,3}\s*\.""")
+        val ListNumberOnly = Regex("""(\d{1,3})\s*\.""")
 
         val InlineLink = Regex("""!?\[([^\]]*)\]\([^)]*\)""")
         val ReferenceLink = Regex("""\[([^\]]*)\]""")

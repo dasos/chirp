@@ -332,4 +332,30 @@ class SessionControllerTest {
 
         controller.shutdown()
     }
+
+    @Test
+    fun `markdown is stripped for TTS but preserved in history`() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val tts = FakeTextToSpeech()
+        val store = FakeConversationStore()
+        val chat = FakeChatClient(tokens = listOf("**Hello**", "! ", "See ", "[docs](https://x.com)", "."))
+        val controller = newController(
+            dispatcher, chat, tts = tts, store = store,
+            settings = SessionSettings(model = "m", systemPrompt = null, autoListen = false),
+        )
+
+        controller.start(null)
+        advanceUntilIdle()
+        controller.submitText("hi")
+        advanceUntilIdle()
+
+        // TTS heard the prose, not the markdown decorators.
+        assertEquals(listOf("Hello!", "See docs."), tts.spoken)
+
+        // The stored reply keeps the raw markdown for the UI/history.
+        val assistant = store.messages.first { it.role == Role.ASSISTANT }
+        assertEquals("**Hello**! See [docs](https://x.com).", assistant.text)
+
+        controller.shutdown()
+    }
 }
