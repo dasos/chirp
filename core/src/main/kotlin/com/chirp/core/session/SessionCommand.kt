@@ -15,14 +15,15 @@ sealed interface SessionCommand {
     /** Start a single listening turn now. */
     data object StartListening : SessionCommand
 
-    /** Toggle: start listening if idle, pause if active. */
-    data object ToggleListen : SessionCommand
+    /**
+     * The big push-to-talk button: walks the loop through its states (start,
+     * submit a finished turn, or interrupt an in-flight reply and listen).
+     */
+    data object PressPrimary : SessionCommand
 
-    data object Pause : SessionCommand
-    data object Resume : SessionCommand
     data object Stop : SessionCommand
 
-    /** Stop current speech and continue the loop. */
+    /** Stop current speech, persist the partial, and listen again. */
     data object StopSpeaking : SessionCommand
 
     /** Inject text as if it had been spoken (type-instead-of-speak fallback). */

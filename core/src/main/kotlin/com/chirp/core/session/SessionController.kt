@@ -48,9 +48,11 @@ import javax.inject.Singleton
  *
  * The first complete sentence is spoken as soon as it streams in (see
  * [SentenceBuffer]); streaming continues concurrently with speech. Control
- * actions (pause/resume/stop/stop-speaking/submit-text) interrupt the loop by
- * cancelling and relaunching it from a clean point, with intent preserved in
- * fields — this avoids fragile self-cancellation of an in-flight turn.
+ * actions (stop/stop-speaking/submit-text/press-primary/park) interrupt the
+ * loop by cancelling and relaunching it from a clean point, with intent
+ * preserved in fields — this avoids fragile self-cancellation of an in-flight
+ * turn. Interrupting a reply mid-stream persists the partial text (marked) so
+ * nothing is lost.
  *
  * On the phone this singleton is owned by `ConversationService` (which adds
  * audio focus, Bluetooth SCO and the foreground notification). The UI observes
@@ -85,6 +87,8 @@ class SessionController @Inject constructor(
     // Loop-state owned by the controller, read by the loop coroutine.
     @Volatile private var running = false
     @Volatile private var paused = false
+    /** When an in-flight reply is cancelled, persist the partial text received so far. */
+    @Volatile private var saveOnInterrupt = false
     @Volatile private var injectedText: String? = null
     @Volatile private var conversationId: Long? = null
     @Volatile private var settings: SessionSettings? = null
@@ -99,9 +103,7 @@ class SessionController @Inject constructor(
         when (command) {
             is SessionCommand.Start -> start(command.conversationId)
             SessionCommand.StartListening -> startListening()
-            SessionCommand.ToggleListen -> toggleListen()
-            SessionCommand.Pause -> pause()
-            SessionCommand.Resume -> resume()
+            SessionCommand.PressPrimary -> pressPrimary()
             SessionCommand.Stop -> stop()
             SessionCommand.StopSpeaking -> stopSpeaking()
             is SessionCommand.SubmitText -> submitText(command.text)
@@ -148,37 +150,51 @@ class SessionController @Inject constructor(
         restartLoopLocked()
     }
 
-    fun toggleListen() = control {
-        if (!running) return@control
-        if (paused) {
-            paused = false
-            wakeOrRestartLocked()
-        } else {
-            paused = true
-            restartLoopLocked()
+    /**
+     * The big push-to-talk button. Walks the loop through its states:
+     *  - idle: start (or resume into) the session,
+     *  - listening: the user has finished their turn — submit the transcript,
+     *  - speaking/thinking: interrupt the reply (persist the partial) and listen,
+     *  - parked/error: start listening again.
+     */
+    fun pressPrimary() = control {
+        if (!running) {
+            start(null)
+            return@control
+        }
+        when (_state.value.phase) {
+            SessionPhase.LISTENING -> submitPartialAsUser()
+            SessionPhase.SPEAKING, SessionPhase.THINKING -> interruptAndListen()
+            SessionPhase.PAUSED, SessionPhase.ERROR -> startListening()
+            SessionPhase.IDLE -> Unit
         }
     }
 
-    fun pause() = control {
+    /**
+     * Park the session in a "Ready"/waiting state without ending it: stop any
+     * in-flight reply (persisting the partial) and stop listening. Used on
+     * permanent audio-focus loss and headset hold actions; the big button
+     * (`PressPrimary`) wakes it again.
+     */
+    fun park() = control {
         if (!running) return@control
+        saveOnInterrupt = isReplying()
         paused = true
-        restartLoopLocked() // loop relaunches and parks at the paused gate
-    }
-
-    fun resume() = control {
-        if (!running) return@control
-        paused = false
-        wakeOrRestartLocked()
-    }
-
-    fun stopSpeaking() = control {
-        if (!running) return@control
-        // If we don't auto-listen, returning to a parked state is the right move.
-        if (settings?.autoListen != true) paused = true
+        injectedText = null
+        noMatchCount = 0
         restartLoopLocked()
     }
 
-fun submitText(text: String) = control {
+    /**
+     * Stop smart speech early. Interrupts the in-flight reply, persists the
+     * partial text received so far (marked), then listens so the user can speak.
+     */
+    fun stopSpeaking() = control {
+        if (!running) return@control
+        interruptAndListen()
+    }
+
+    fun submitText(text: String) = control {
         val trimmed = text.trim()
         if (trimmed.isEmpty()) return@control
         if (!running) {
@@ -192,18 +208,29 @@ fun submitText(text: String) = control {
             conversationId = conversationId ?: store.createConversation(s.model, s.systemPrompt)
             running = true
             _state.update { it.copy(active = true, conversationId = conversationId, model = s.model, autoListen = s.autoListen) }
+        } else if (isReplying()) {
+            // Typing mid-reply interrupts the assistant like the big button does.
+            saveOnInterrupt = true
         }
         injectedText = trimmed
         paused = false
         restartLoopLocked()
     }
 
+    /**
+     * End the session. If the assistant is mid-reply, stop it and persist the
+     * partial text; a mid-listen transcript is discarded (not sent to the model).
+     * Never re-listens afterwards.
+     */
     fun stop() = control {
+        if (!running) return@control
+        saveOnInterrupt = isReplying()
+        loopJob?.cancelAndJoin()
+        loopJob = null
+        saveOnInterrupt = false
         running = false
         paused = false
         injectedText = null
-        loopJob?.cancelAndJoin()
-        loopJob = null
         resumeSignal.trySend(Unit)
         runCatching { tts.stop() }
         _state.update {
@@ -317,6 +344,7 @@ fun submitText(text: String) = control {
     }
 
     private suspend fun respond(userText: String, s: SessionSettings) {
+        saveOnInterrupt = false
         _events.tryEmit(SessionEvent.UserUtterance(userText))
         val convId = conversationId ?: store.createConversation(s.model, s.systemPrompt).also { conversationId = it }
         store.appendMessage(convId, Role.USER, userText)
@@ -363,6 +391,9 @@ fun submitText(text: String) = control {
                 }
                 sentenceBuffer.flush()?.let { sentences.send(it) }
             } catch (c: CancellationException) {
+                // Interrupted mid-reply (big button, stop-speaking, or End):
+                // persist whatever was received rather than losing it.
+                persistPartialOnInterrupt(convId, full.toString(), s)
                 throw c
             } catch (_: Throwable) {
                 failed = true
@@ -484,6 +515,47 @@ fun submitText(text: String) = control {
         }
     }
 
+    private fun isReplying() =
+        _state.value.phase == SessionPhase.SPEAKING || _state.value.phase == SessionPhase.THINKING
+
+    /** Cuts the assistant off: keep speaking, persist the partial, then listen. */
+    private suspend fun interruptAndListen() {
+        saveOnInterrupt = true
+        paused = false
+        injectedText = null
+        noMatchCount = 0
+        restartLoopLocked()
+    }
+
+    /** Big button while listening: the user is done — send the current transcript. */
+    private suspend fun submitPartialAsUser() {
+        val transcript = _state.value.partialTranscript.trim()
+        if (transcript.isEmpty()) return
+        injectedText = transcript
+        paused = false
+        noMatchCount = 0
+        restartLoopLocked()
+    }
+
+    private fun markInterrupted(text: String): String {
+        val trimmed = text.trim()
+        if (trimmed.isEmpty()) return ""
+        return "$trimmed …"
+    }
+
+    /** Persists the partial reply on interrupt (best-effort, detached from the cancelled loop). */
+    private fun persistPartialOnInterrupt(convId: Long, partial: String, s: SessionSettings) {
+        if (partial.isBlank() || !saveOnInterrupt) return
+        val text = markInterrupted(partial)
+        if (text.isBlank()) return
+        scope.launch {
+            runCatching {
+                store.appendMessage(convId, Role.ASSISTANT, text)
+                maybeGenerateTitle(convId, s)
+            }
+        }
+    }
+
     private fun consumeInjectedText(): String? {
         val injected = injectedText ?: return null
         injectedText = null
@@ -530,14 +602,6 @@ fun submitText(text: String) = control {
                 emitError(t.message ?: "Unexpected error")
                 _state.update { it.copy(phase = SessionPhase.ERROR) }
             }
-        }
-    }
-
-    private suspend fun wakeOrRestartLocked() {
-        if (loopJob?.isActive == true) {
-            resumeSignal.trySend(Unit)
-        } else {
-            restartLoopLocked()
         }
     }
 

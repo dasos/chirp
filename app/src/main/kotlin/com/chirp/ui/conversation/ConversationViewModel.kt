@@ -70,12 +70,10 @@ class ConversationViewModel @Inject constructor(
                 ConversationService.startIntent(appContext, argId),
             )
         } else {
-            sendAction(ConversationService.ACTION_TOGGLE_LISTEN)
+            sendAction(ConversationService.ACTION_PRIMARY)
         }
     }
 
-    fun pause() = sendAction(ConversationService.ACTION_PAUSE)
-    fun resume() = sendAction(ConversationService.ACTION_RESUME)
     fun stopSpeaking() = sendAction(ConversationService.ACTION_STOP_SPEAKING)
     fun endSession() = sendAction(ConversationService.ACTION_STOP)
 

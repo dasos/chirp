@@ -17,7 +17,7 @@ enum class SessionPhase {
     /** Speaking the response aloud. */
     SPEAKING,
 
-    /** Loop suspended by the user (or transient audio-focus loss). */
+    /** Session open but waiting (auto-listen off, after a turn, parked on focus loss). */
     PAUSED,
 
     /** A recoverable error occurred; message is spoken and shown. */

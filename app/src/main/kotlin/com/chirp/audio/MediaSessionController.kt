@@ -9,10 +9,10 @@ import javax.inject.Singleton
 
 /**
  * Maps headset media buttons (play/pause, stop) to session control via a
- * [MediaSessionCompat]. The single-click play/pause button toggles the loop's
- * pause/resume; a stop event ends the session. The foreground service supplies
- * the [Callback] and keeps the playback state in sync so the OS routes the
- * correct transport action.
+ * [MediaSessionCompat]. The play/pause button drives the push-to-talk primary
+ * action or parks the session in "Ready"; a stop event ends it. The foreground
+ * service supplies the [Callback] and keeps the playback state in sync so the
+ * OS routes the correct transport action.
  *
  * PHASE 2: the Wear companion sends commands through the Data Layer rather than
  * media buttons, but both ultimately call the same service actions.

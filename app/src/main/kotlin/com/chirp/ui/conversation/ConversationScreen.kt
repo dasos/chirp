@@ -17,7 +17,6 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Stop
-import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -214,10 +213,7 @@ fun ConversationScreen(
 
             ControlsRow(
                 active = state.active,
-                paused = state.phase == SessionPhase.PAUSED,
                 speaking = state.phase == SessionPhase.SPEAKING,
-                onPause = viewModel::pause,
-                onResume = viewModel::resume,
                 onStopSpeaking = viewModel::stopSpeaking,
                 onEnd = viewModel::endSession,
             )
@@ -251,10 +247,7 @@ fun ConversationScreen(
 @Composable
 private fun ControlsRow(
     active: Boolean,
-    paused: Boolean,
     speaking: Boolean,
-    onPause: () -> Unit,
-    onResume: () -> Unit,
     onStopSpeaking: () -> Unit,
     onEnd: () -> Unit,
 ) {
@@ -266,11 +259,6 @@ private fun ControlsRow(
         horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        if (paused) {
-            Button(onClick = onResume) { Text("Resume") }
-        } else {
-            OutlinedButton(onClick = onPause) { Text("Pause") }
-        }
         if (speaking) {
             OutlinedButton(onClick = onStopSpeaking) { Text("Stop speaking") }
         }
@@ -302,7 +290,7 @@ private fun statusLabel(phase: SessionPhase): String = when (phase) {
     SessionPhase.LISTENING -> "Listening…"
     SessionPhase.THINKING -> "Thinking…"
     SessionPhase.SPEAKING -> "Speaking…"
-    SessionPhase.PAUSED -> "Paused"
+    SessionPhase.PAUSED -> "Ready — tap the mic to talk"
     SessionPhase.ERROR -> "Tap the mic to retry"
 }
 

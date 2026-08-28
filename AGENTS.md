@@ -52,12 +52,14 @@ Two Gradle modules — **respect the boundary**:
 ## Architecture invariants — do not break these
 
 1. **The hands-free loop is one long-lived coroutine** in
-   `core/session/SessionController`. Control actions (pause/resume/stop/
-   stop-speaking/submit-text) interrupt it by **cancel-and-relaunch from a clean
-   point** — they never mutate an in-flight turn in place. Intent is preserved in
-   `@Volatile` fields (`running` / `paused` / `injectedText`). Always mutate loop
-   state and (re)launch through `control { ... }` (holds `loopMutex`); never poke
-   `loopJob` directly.
+   `core/session/SessionController`. Control actions (press-primary/stop/
+   stop-speaking/submit-text/park) interrupt it by **cancel-and-relaunch from a
+   clean point** — they never mutate an in-flight turn in place. Intent is
+   preserved in `@Volatile` fields (`running` / `paused` / `injectedText` /
+   `saveOnInterrupt`). Always mutate loop state and (re)launch through
+   `control { ... }` (holds `loopMutex`); never poke `loopJob` directly.
+   Interrupting a reply mid-stream persists the partial text (marked `…`) so
+   nothing the user heard is lost.
 2. **One control funnel:** UI / notification buttons / headset media buttons /
    (future) Wear → `ConversationService` action intents → `SessionController`. Add
    new control entry points as **service actions**, not by calling the controller
@@ -69,7 +71,7 @@ Two Gradle modules — **respect the boundary**:
    truth** rendered by the UI, the notification, and (Phase 2) the watch. One-off
    effects (haptics) go through `events: SharedFlow<SessionEvent>`.
 5. **TTS cancellation must stop playback** (`AndroidTextToSpeech.speak` cancels →
-   `engine.stop()`). Pause / stop-speaking rely on this.
+   `engine.stop()`). Stop-speaking / interrupting rely on this.
 
 ## How the streaming ↔ TTS coupling works
 

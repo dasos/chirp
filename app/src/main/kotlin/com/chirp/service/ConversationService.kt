@@ -44,22 +44,24 @@ class ConversationService : LifecycleService() {
     private var idleTimeoutJob: Job? = null
 
     private val focusCallback = object : AudioRouteManager.FocusCallback {
-        override fun onFocusLost() = controller.pause()
+        override fun onFocusLost() = controller.park()
         // SpeechRecognizer itself briefly takes mic focus while listening — the
         // system delivers a transient loss when recognition starts and a gain
-        // when it stops. Treating those as pause/resume cancels the in-flight
+        // when it stops. Treating those as park/resume cancels the in-flight
         // recognition, which releases the mic, which triggers a gain, which
         // restarts recognition — a self-sustaining focus flap (see logcat:
         // LOSS_TRANSIENT/GAIN alternating every millisecond). So ignore
         // transient loss/gain; only a permanent loss parks the session (the
-        // user re-taps the mic to resume).
+        // user taps the mic to resume).
         override fun onTransientLoss() = Unit
         override fun onFocusGained() = Unit
     }
 
     private val mediaCallback = object : MediaSessionController.Callback {
-        override fun onPlay() = controller.resume()
-        override fun onPause() = controller.pause()
+        // Play heads to the primary push-to-talk action; pause/other hold parks
+        // the session in "Ready"; stop ends it. There is no separate Pause control.
+        override fun onPlay() = controller.pressPrimary()
+        override fun onPause() = controller.park()
         override fun onStop() = stopSession()
     }
 
@@ -77,9 +79,7 @@ class ConversationService : LifecycleService() {
                 intent.getLongExtra(EXTRA_CONVERSATION_ID, -1L).takeIf { it >= 0 },
                 intent.getStringExtra(EXTRA_TEXT),
             )
-            ACTION_TOGGLE_LISTEN -> controller.toggleListen()
-            ACTION_PAUSE -> controller.pause()
-            ACTION_RESUME -> controller.resume()
+            ACTION_PRIMARY -> controller.pressPrimary()
             ACTION_STOP_SPEAKING -> controller.stopSpeaking()
             ACTION_SUBMIT_TEXT -> intent.getStringExtra(EXTRA_TEXT)?.let { controller.submitText(it) }
             ACTION_STOP -> stopSession()
@@ -177,9 +177,7 @@ class ConversationService : LifecycleService() {
 
     companion object {
         const val ACTION_START = "com.chirp.action.START"
-        const val ACTION_TOGGLE_LISTEN = "com.chirp.action.TOGGLE_LISTEN"
-        const val ACTION_PAUSE = "com.chirp.action.PAUSE"
-        const val ACTION_RESUME = "com.chirp.action.RESUME"
+        const val ACTION_PRIMARY = "com.chirp.action.PRIMARY"
         const val ACTION_STOP = "com.chirp.action.STOP"
         const val ACTION_STOP_SPEAKING = "com.chirp.action.STOP_SPEAKING"
         const val ACTION_SUBMIT_TEXT = "com.chirp.action.SUBMIT_TEXT"

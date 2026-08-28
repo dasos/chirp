@@ -9,7 +9,7 @@
 
 A native Android app for **hands-free voice conversations with AI models via [OpenRouter](https://openrouter.ai)** — or any OpenAI-compatible endpoint — designed for use while walking with Bluetooth headphones.
 
-Speak → on-device speech-to-text → stream the reply from the chat backend → speak it back **sentence-by-sentence** as it arrives → automatically listen again. The loop runs in a foreground service so it survives screen-off, and headset media buttons pause/resume it.
+Speak → on-device speech-to-text → stream the reply from the chat backend → speak it back **sentence-by-sentence** as it arrives → automatically listen again. The loop runs in a foreground service so it survives screen-off, and the big push-to-talk button / headset media buttons walk it (talk → hear → talk again).
 
 - **Kotlin + Jetpack Compose** (Material 3, dynamic color, dark mode)
 - **OpenRouter by default, nothing else required** — the app talks directly to `https://openrouter.ai/api/v1` (`POST /chat/completions`, `GET /models`); any OpenAI-compatible gateway (e.g. a self-hosted LiteLLM box) works via the advanced base-URL setting
@@ -42,8 +42,8 @@ Speak → on-device speech-to-text → stream the reply from the chat backend �
 
 - 🎙️ **Hands-free loop** — speak, hear the reply, and it listens again automatically; keep your phone in your pocket while walking.
 - ⚡ **Low-latency speech** — the reply is spoken **sentence-by-sentence** as it streams in, instead of waiting for the whole response.
-- 🎧 **Bluetooth-aware** — routes the mic over Bluetooth SCO when a headset is connected, requests audio focus, and maps **headset media buttons** to pause/resume and stop speaking.
-- 🔔 **Survives screen-off** — a foreground service keeps the session alive, with a persistent notification showing state (Listening / Thinking / Speaking / Paused), the latest partial reply, an elapsed "Thinking…" timer, and Pause/Resume + Stop actions.
+- 🎧 **Bluetooth-aware** — routes the mic over Bluetooth SCO when a headset is connected, requests audio focus, and maps **headset media buttons** to the push-to-talk primary action (and stop speaking).
+- 🔔 **Survives screen-off** — a foreground service keeps the session alive, with a persistent notification showing state (Listening / Thinking / Speaking / Ready), the latest partial reply, an elapsed "Thinking…" timer, and Stop (+ Stop speaking) actions.
 - 🔒 **Your key, your rules** — the API key is stored in `EncryptedSharedPreferences`, sent as a bearer token on every request, and plaintext HTTP to non-local hosts is refused.
 - 💾 **History** — conversations and messages persist locally (Room), with auto-generated titles, swipe-to-delete, and tap-to-continue.
 - ⌨️ **Type-instead-of-speak** fallback for noisy environments.
@@ -92,7 +92,7 @@ Two Gradle modules keep the portable session logic free of Android so it is unit
 
 > **listen** → transcript → **stream** from the chat backend → feed tokens to `SentenceBuffer` → **speak** each complete sentence as soon as it's ready (streaming continues while speaking) → **auto-listen** again.
 
-Control actions (pause / resume / stop / stop-speaking / submit-text) interrupt the loop by cancelling and relaunching it from a clean point, with intent preserved in fields — this avoids fragile self-cancellation of an in-flight turn. State is exposed as a `StateFlow<SessionState>`; one-off effects (haptics) as a `SharedFlow<SessionEvent>`.
+Control actions (press-primary / stop / stop-speaking / submit-text / park) interrupt the loop by cancelling and relaunching it from a clean point, with intent preserved in fields — this avoids fragile self-cancellation of an in-flight turn. Interrupting a reply mid-stream persists the partial text (marked `…`) so nothing is lost. State is exposed as a `StateFlow<SessionState>`; one-off effects (haptics) as a `SharedFlow<SessionEvent>`.
 
 ### Control flow
 

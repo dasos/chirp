@@ -74,9 +74,7 @@ object WearContract {
     fun encodeCommand(command: SessionCommand): ByteArray = when (command) {
         is SessionCommand.Start -> "start:${command.conversationId ?: ""}"
         SessionCommand.StartListening -> "listen"
-        SessionCommand.ToggleListen -> "toggle"
-        SessionCommand.Pause -> "pause"
-        SessionCommand.Resume -> "resume"
+        SessionCommand.PressPrimary -> "press"
         SessionCommand.Stop -> "stop"
         SessionCommand.StopSpeaking -> "stop_speaking"
         is SessionCommand.SubmitText -> "text:${command.text}"
@@ -86,9 +84,7 @@ object WearContract {
         val raw = bytes.decodeToString()
         return when {
             raw == "listen" -> SessionCommand.StartListening
-            raw == "toggle" -> SessionCommand.ToggleListen
-            raw == "pause" -> SessionCommand.Pause
-            raw == "resume" -> SessionCommand.Resume
+            raw == "press" -> SessionCommand.PressPrimary
             raw == "stop" -> SessionCommand.Stop
             raw == "stop_speaking" -> SessionCommand.StopSpeaking
             raw.startsWith("start:") ->

@@ -17,7 +17,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.Mic
-import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PriorityHigh
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -185,7 +184,7 @@ private fun coreColor(phase: SessionPhase): Color = when (phase) {
 private fun iconFor(phase: SessionPhase): ImageVector = when (phase) {
     SessionPhase.LISTENING -> Icons.Filled.Mic
     SessionPhase.SPEAKING -> Icons.Filled.GraphicEq
-    SessionPhase.PAUSED -> Icons.Filled.Pause
+    SessionPhase.PAUSED -> Icons.Filled.Mic
     SessionPhase.ERROR -> Icons.Filled.PriorityHigh
     else -> Icons.Filled.Mic
 }

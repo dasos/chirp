@@ -1,11 +1,18 @@
 package com.chirp.core.session
 
 import com.chirp.core.chat.ChatClient
+import com.chirp.core.chat.ChatRequestSpec
+import com.chirp.core.chat.ChatStreamEvent
 import com.chirp.core.model.Conversation
 import com.chirp.core.model.Role
 import com.chirp.core.speech.SpeechToTextEngine
+import com.chirp.core.speech.SttConfig
+import com.chirp.core.speech.SttEvent
 import com.chirp.core.util.Clock
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -162,5 +169,135 @@ class SessionControllerTest {
         assertEquals("New conversation", Conversation.sanitizeTitle("   "))
         assertEquals("A".repeat(50), Conversation.sanitizeTitle("A".repeat(50)))
         assertEquals("A".repeat(50) + "…", Conversation.sanitizeTitle("A".repeat(60)))
+    }
+
+    @Test
+    fun `pressPrimary while listening submits the partial transcript as the user turn`() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val store = FakeConversationStore()
+        val chat = FakeChatClient(tokens = listOf("Hi,", " how are you?"))
+        val stt = object : SpeechToTextEngine {
+            override suspend fun isAvailable(): Boolean = true
+            override fun listen(config: SttConfig): Flow<SttEvent> = flow {
+                emit(SttEvent.PartialResult("Hello there"))
+                awaitCancellation()
+            }
+        }
+        val controller = newController(
+            dispatcher, chat, store = store, stt = stt,
+            settings = SessionSettings(model = "m", systemPrompt = null, autoListen = true),
+        )
+
+        controller.start(null)
+        advanceUntilIdle()
+        assertEquals(SessionPhase.LISTENING, controller.state.value.phase)
+
+        controller.pressPrimary()
+        advanceUntilIdle()
+
+        val user = store.messages.first { it.role == Role.USER }
+        assertEquals("Hello there", user.text)
+        assertEquals("Hi, how are you?", store.messages.first { it.role == Role.ASSISTANT }.text)
+
+        controller.shutdown()
+    }
+
+    @Test
+    fun `interrupting a reply on pressPrimary persists the partial reply with a cut marker`() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val store = FakeConversationStore()
+        val chat = object : FakeChatClient(tokens = listOf("Paris", " is", " the", " capital.")) {
+            override fun streamChat(spec: ChatRequestSpec): Flow<ChatStreamEvent> = flow {
+                tokens.forEach { emit(ChatStreamEvent.Token(it)) }
+                awaitCancellation()
+            }
+        }
+        val stt = object : SpeechToTextEngine {
+            override suspend fun isAvailable(): Boolean = true
+            override fun listen(config: SttConfig): Flow<SttEvent> = flow {
+                awaitCancellation()
+            }
+        }
+        val controller = newController(
+            dispatcher, chat, store = store, stt = stt,
+            settings = SessionSettings(model = "m", systemPrompt = null, autoListen = true),
+        )
+
+        controller.start(null)
+        advanceUntilIdle()
+        controller.submitText("Cancel this turn")
+        advanceUntilIdle()
+        assertEquals(SessionPhase.THINKING, controller.state.value.phase)
+
+        controller.pressPrimary()
+        advanceUntilIdle()
+
+        val assistant = store.messages.first { it.role == Role.ASSISTANT }
+        assertTrue(assistant.text.startsWith("Paris is the capital."))
+        assertTrue(assistant.text.endsWith("…"))
+
+        controller.shutdown()
+    }
+
+    @Test
+    fun `end while listening discards the transcript without sending to the model`() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val store = FakeConversationStore()
+        val chat = FakeChatClient()
+        val stt = object : SpeechToTextEngine {
+            override suspend fun isAvailable(): Boolean = true
+            override fun listen(config: SttConfig): Flow<SttEvent> = flow {
+                emit(SttEvent.PartialResult("partial thoughts"))
+                awaitCancellation()
+            }
+        }
+        val controller = newController(
+            dispatcher, chat, store = store, stt = stt,
+            settings = SessionSettings(model = "m", systemPrompt = null, autoListen = true),
+        )
+
+        controller.start(null)
+        advanceUntilIdle()
+        assertEquals(SessionPhase.LISTENING, controller.state.value.phase)
+
+        controller.stop()
+        advanceUntilIdle()
+
+        assertEquals(SessionPhase.IDLE, controller.state.value.phase)
+        assertFalse(controller.state.value.active)
+        assertTrue(store.messages.isEmpty())
+
+        controller.shutdown()
+    }
+
+    @Test
+    fun `end while replying persists the partial reply`() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val store = FakeConversationStore()
+        val chat = object : FakeChatClient(tokens = listOf("Partial", " answer")) {
+            override fun streamChat(spec: ChatRequestSpec): Flow<ChatStreamEvent> = flow {
+                tokens.forEach { emit(ChatStreamEvent.Token(it)) }
+                awaitCancellation()
+            }
+        }
+        val controller = newController(
+            dispatcher, chat, store = store,
+            settings = SessionSettings(model = "m", systemPrompt = null, autoListen = true),
+        )
+
+        controller.start(null)
+        advanceUntilIdle()
+        controller.submitText("Type a question")
+        advanceUntilIdle()
+        assertEquals(SessionPhase.THINKING, controller.state.value.phase)
+
+        controller.stop()
+        advanceUntilIdle()
+
+        val assistant = store.messages.first { it.role == Role.ASSISTANT }
+        assertTrue(assistant.text.startsWith("Partial answer"))
+        assertTrue(assistant.text.endsWith("…"))
+
+        controller.shutdown()
     }
 }

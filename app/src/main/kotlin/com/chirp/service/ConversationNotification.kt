@@ -18,7 +18,7 @@ import javax.inject.Singleton
 /**
  * Builds and updates the persistent conversation notification: current state,
  * the latest partial response, an elapsed-time chronometer while "Thinking…",
- * and Pause/Resume + Stop (+ Stop speaking) action buttons.
+ * and Stop (+ Stop speaking) action buttons.
  */
 @Singleton
 class ConversationNotification @Inject constructor(
@@ -60,32 +60,18 @@ class ConversationNotification @Inject constructor(
             builder.setShowWhen(false)
         }
 
-        if (state.phase == SessionPhase.PAUSED) {
-            builder.addAction(
-                R.drawable.ic_play,
-                "Resume",
-                servicePendingIntent(ConversationService.ACTION_RESUME, 1),
-            )
-        } else {
-            builder.addAction(
-                R.drawable.ic_pause,
-                "Pause",
-                servicePendingIntent(ConversationService.ACTION_PAUSE, 2),
-            )
-        }
-
         if (state.phase == SessionPhase.SPEAKING) {
             builder.addAction(
                 R.drawable.ic_stop,
                 "Stop speaking",
-                servicePendingIntent(ConversationService.ACTION_STOP_SPEAKING, 3),
+                servicePendingIntent(ConversationService.ACTION_STOP_SPEAKING, 2),
             )
         }
 
         builder.addAction(
             R.drawable.ic_stop,
             "Stop",
-            servicePendingIntent(ConversationService.ACTION_STOP, 4),
+            servicePendingIntent(ConversationService.ACTION_STOP, 3),
         )
 
         return builder.build()
@@ -104,7 +90,7 @@ class ConversationNotification @Inject constructor(
         SessionPhase.LISTENING -> "Listening…"
         SessionPhase.THINKING -> "Thinking…"
         SessionPhase.SPEAKING -> "Speaking…"
-        SessionPhase.PAUSED -> "Paused"
+        SessionPhase.PAUSED -> "Ready"
         SessionPhase.ERROR -> "Connection problem"
     }
 
@@ -113,7 +99,7 @@ class ConversationNotification @Inject constructor(
         state.phase == SessionPhase.LISTENING && state.partialTranscript.isNotBlank() ->
             "“${state.partialTranscript}”"
         state.partialResponse.isNotBlank() -> state.partialResponse
-        state.phase == SessionPhase.PAUSED -> "Tap Resume or the mic to continue."
+        state.phase == SessionPhase.PAUSED -> "Tap the mic to continue."
         else -> "Tap to open the conversation."
     }
 
