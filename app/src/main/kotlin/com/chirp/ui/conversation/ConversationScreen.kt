@@ -290,7 +290,7 @@ private fun statusLabel(phase: SessionPhase): String = when (phase) {
     SessionPhase.LISTENING -> "Listening…"
     SessionPhase.THINKING -> "Thinking…"
     SessionPhase.SPEAKING -> "Speaking…"
-    SessionPhase.PAUSED -> "Ready — tap the mic to talk"
+    SessionPhase.PAUSED -> "Tap the mic to talk"
     SessionPhase.ERROR -> "Tap the mic to retry"
 }
 

@@ -90,7 +90,7 @@ class ConversationNotification @Inject constructor(
         SessionPhase.LISTENING -> "Listening…"
         SessionPhase.THINKING -> "Thinking…"
         SessionPhase.SPEAKING -> "Speaking…"
-        SessionPhase.PAUSED -> "Ready"
+        SessionPhase.PAUSED -> "Chirp"
         SessionPhase.ERROR -> "Connection problem"
     }
 
