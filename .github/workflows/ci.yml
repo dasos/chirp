@@ -56,6 +56,14 @@ jobs:
       - uses: gradle/actions/setup-gradle@v6
         with:
           gradle-version: '8.11.1'
+      - name: Verify version matches release tag
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          APP_VERSION=$(grep -oP 'versionName = "\K[^"]+' app/build.gradle.kts)
+          if [ "${{ github.ref_name }}" != "v$APP_VERSION" ]; then
+            echo "::error::Tag ${{ github.ref_name }} does not match versionName $APP_VERSION"
+            exit 1
+          fi
       - name: Assemble debug APK
         run: gradle :app:assembleDebug --no-daemon --stacktrace
       - name: Upload debug APK

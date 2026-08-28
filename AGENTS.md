@@ -135,7 +135,7 @@ CI triggers only on `v*` tags. To make a release, tag the **specific commit** yo
 git tag v0.2.0 && git push origin v0.2.0
 ```
 
-This kicks off CI, which builds and auto-creates a GitHub Release with the APK attached + generated release notes. Do **not** tag for workflow-only changes (e.g. CI config) — those can be committed to `main` without triggering a build.
+This kicks off CI, which builds and auto-creates a GitHub Release with the APK attached + generated release notes. CI enforces that the tag name matches `versionName` in `app/build.gradle.kts` — bump the version before tagging. Do **not** tag for workflow-only changes (e.g. CI config) — those can be committed to `main` without triggering a build.
 
 ## Phase 2 (Wear OS) — architected, not built
 
