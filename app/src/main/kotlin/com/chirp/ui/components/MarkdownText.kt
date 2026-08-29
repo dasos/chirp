@@ -2,6 +2,7 @@ package com.chirp.ui.components
 
 import androidx.compose.foundation.text.ClickableText
 import androidx.compose.material3.ColorScheme
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -14,6 +15,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.graphics.isSpecified
 
 /**
  * A tiny, dependency-free Markdown renderer for chat bubbles. It keeps the raw
@@ -34,11 +36,18 @@ fun MarkdownText(
 ) {
     val uriHandler = LocalUriHandler.current
     val colors = MaterialTheme.colorScheme
-    val annotated = remember(text, style, colors) { buildMarkdown(text, style, colors) }
+    // ClickableText (Foundation) doesn't resolve LocalContentColor the way material3.Text
+    // does, so an unspecified style color falls back to hardcoded black (unreadable on
+    // dark bubbles). Resolve the ambient content color ourselves, honoring an explicit one.
+    val contentColor = LocalContentColor.current
+    val mergedStyle = remember(style, contentColor) {
+        if (style.color.isSpecified) style else style.copy(color = contentColor)
+    }
+    val annotated = remember(text, mergedStyle, colors) { buildMarkdown(text, mergedStyle, colors) }
     ClickableText(
         text = annotated,
         modifier = modifier,
-        style = style,
+        style = mergedStyle,
     ) { offset ->
         annotated.getStringAnnotations(LinkKey, offset, offset)
             .firstOrNull()
