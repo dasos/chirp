@@ -42,10 +42,12 @@ object WearContract {
         val partialResponse: String,
         val model: String,
         val autoListen: Boolean,
+        /** Mirrors the phone's "start listening on new conversation" setting. */
+        val startListeningOnNewConversation: Boolean = false,
         val errorMessage: String? = null,
     )
 
-    fun encodeState(state: SessionState): ByteArray =
+    fun encodeState(state: SessionState, startListeningOnNewConversation: Boolean = false): ByteArray =
         json.encodeToString(
             StatePayload(
                 phase = state.phase.name,
@@ -53,21 +55,27 @@ object WearContract {
                 partialResponse = state.partialResponse.take(200),
                 model = state.model,
                 autoListen = state.autoListen,
+                startListeningOnNewConversation = startListeningOnNewConversation,
                 errorMessage = state.errorMessage,
             )
         ).encodeToByteArray()
 
-    fun decodeState(bytes: ByteArray): SessionState? = runCatching {
-        val p = json.decodeFromString<StatePayload>(bytes.decodeToString())
-        SessionState(
-            phase = runCatching { SessionPhase.valueOf(p.phase) }.getOrDefault(SessionPhase.IDLE),
-            active = p.active,
-            partialResponse = p.partialResponse,
-            model = p.model,
-            autoListen = p.autoListen,
-            errorMessage = p.errorMessage,
-        )
+    fun decodeState(bytes: ByteArray): SessionState? =
+        decodeStatePayload(bytes)?.let { toSessionState(it) }
+
+    /** Decodes the full wire payload so the watch can also read the start-listening pref. */
+    fun decodeStatePayload(bytes: ByteArray): StatePayload? = runCatching {
+        json.decodeFromString<StatePayload>(bytes.decodeToString())
     }.getOrNull()
+
+    fun toSessionState(payload: StatePayload): SessionState = SessionState(
+        phase = runCatching { SessionPhase.valueOf(payload.phase) }.getOrDefault(SessionPhase.IDLE),
+        active = payload.active,
+        partialResponse = payload.partialResponse,
+        model = payload.model,
+        autoListen = payload.autoListen,
+        errorMessage = payload.errorMessage,
+    )
 
     // --- Commands (watch -> phone) ------------------------------------------
 

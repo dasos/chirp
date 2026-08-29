@@ -104,6 +104,9 @@ dependencies {
     // Media / headset buttons
     implementation(libs.androidx.media)
 
+    // Wear OS bridge (Phase 2): Data Layer + WearableListenerService
+    implementation(libs.play.services.wearable)
+
     // Coroutines / network
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.okhttp)

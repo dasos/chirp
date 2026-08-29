@@ -12,9 +12,11 @@ import androidx.lifecycle.LifecycleService
 import androidx.lifecycle.lifecycleScope
 import com.chirp.audio.AudioRouteManager
 import com.chirp.audio.MediaSessionController
+import com.chirp.core.session.SessionCommand
 import com.chirp.core.session.SessionPhase
 import com.chirp.core.session.SessionController
 import com.chirp.speech.AndroidTextToSpeech
+import com.chirp.wear.WearDataSync
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -48,6 +50,7 @@ class ConversationService : LifecycleService() {
     @Inject lateinit var mediaSession: MediaSessionController
     @Inject lateinit var tts: AndroidTextToSpeech
     @Inject lateinit var notifications: ConversationNotification
+    @Inject lateinit var wearDataSync: WearDataSync
 
     private var started = false
     private var lastPhase: SessionPhase? = null
@@ -85,6 +88,7 @@ class ConversationService : LifecycleService() {
     override fun onCreate() {
         super.onCreate()
         notifications.createChannel()
+        wearDataSync.start()
         observeState()
     }
 
@@ -99,6 +103,7 @@ class ConversationService : LifecycleService() {
             )
             ACTION_PRIMARY -> controller.pressPrimary()
             ACTION_STOP_SPEAKING -> controller.stopSpeaking()
+            ACTION_LISTEN -> controller.startListening()
             ACTION_SUBMIT_TEXT -> intent.getStringExtra(EXTRA_TEXT)?.let { controller.submitText(it) }
             ACTION_STOP -> stopSession()
         }
@@ -373,8 +378,22 @@ class ConversationService : LifecycleService() {
         const val ACTION_PRIMARY = "com.chirp.action.PRIMARY"
         const val ACTION_STOP = "com.chirp.action.STOP"
         const val ACTION_STOP_SPEAKING = "com.chirp.action.STOP_SPEAKING"
+        const val ACTION_LISTEN = "com.chirp.action.LISTEN"
         const val ACTION_SUBMIT_TEXT = "com.chirp.action.SUBMIT_TEXT"
 
+        // Wear command -> service intent mapping (see PhoneWearMessageService).
+        // Commands funnel through the same action intents as every other control
+        // path (invariant: single control funnel).
+        fun intentForWearCommand(context: Context, command: SessionCommand): Intent? = when (command) {
+            is SessionCommand.Start ->
+                if (command.conversationId == null) startIntent(context, null)
+                else startIntent(context, command.conversationId)
+            SessionCommand.StartListening -> intent(context, ACTION_LISTEN)
+            SessionCommand.PressPrimary -> intent(context, ACTION_PRIMARY)
+            SessionCommand.Stop -> intent(context, ACTION_STOP)
+            SessionCommand.StopSpeaking -> intent(context, ACTION_STOP_SPEAKING)
+            is SessionCommand.SubmitText -> submitTextIntent(context, command.text)
+        }
 
         const val EXTRA_CONVERSATION_ID = "extra_conversation_id"
         const val EXTRA_TEXT = "extra_text"

@@ -20,6 +20,13 @@ securityCrypto = "1.1.0-alpha06"
 # Media (headset buttons / MediaSession)
 media = "1.7.0"
 
+# Wear OS (Phase 2)
+playServicesWearable = "18.1.0"
+wearCompose = "1.4.0"
+wearComposeMaterial = "1.4.0"
+wearTiles = "1.4.0"
+activityComposeWear = "1.9.3"
+
 # Async / serialization / network
 coroutines = "1.9.0"
 serialization = "1.7.3"
@@ -70,9 +77,19 @@ androidx-security-crypto = { group = "androidx.security", name = "security-crypt
 # Media
 androidx-media = { group = "androidx.media", name = "media", version.ref = "media" }
 
+# Wear OS (Phase 2)
+play-services-wearable = { group = "com.google.android.gms", name = "play-services-wearable", version.ref = "playServicesWearable" }
+androidx-wear-compose = { group = "androidx.wear.compose", name = "compose-foundation", version.ref = "wearCompose" }
+androidx-wear-compose-material = { group = "androidx.wear.compose", name = "compose-material", version.ref = "wearComposeMaterial" }
+androidx-wear-compose-navigation = { group = "androidx.wear.compose", name = "compose-navigation", version.ref = "wearCompose" }
+androidx-wear-tiles = { group = "androidx.wear.tiles", name = "tiles", version.ref = "wearTiles" }
+androidx-wear-tooling-preview = { group = "androidx.wear", name = "wear-tooling-preview", version.ref = "wearTiles" }
+androidx-activity-wear-compose = { group = "androidx.activity", name = "activity-compose", version.ref = "activityComposeWear" }
+
 # Coroutines / serialization / network
 kotlinx-coroutines-core = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-core", version.ref = "coroutines" }
 kotlinx-coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android", version.ref = "coroutines" }
+kotlinx-coroutines-play-services = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-play-services", version.ref = "coroutines" }
 kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref = "serialization" }
 okhttp = { group = "com.squareup.okhttp3", name = "okhttp", version.ref = "okhttp" }
 javax-inject = { group = "javax.inject", name = "javax.inject", version.ref = "javaxInject" }

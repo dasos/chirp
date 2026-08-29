@@ -55,6 +55,15 @@
             android:name=".service.StandbyTimeoutReceiver"
             android:exported="false" />
 
+        <!-- Receives Wear companion commands (PATH /chirp/command). -->
+        <service
+            android:name=".wear.PhoneWearMessageService"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.google.android.gms.wearable.BIND_LISTENER" />
+            </intent-filter>
+        </service>
+
         <!-- Routes headset media buttons to the active MediaSessionCompat. -->
         <receiver
             android:name="androidx.media.session.MediaButtonReceiver"
