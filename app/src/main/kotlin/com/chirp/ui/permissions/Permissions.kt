@@ -29,6 +29,8 @@ val conversationPermissions: Array<String> = buildList {
 
 fun Context.hasMicPermission(): Boolean = hasPermission(Manifest.permission.RECORD_AUDIO)
 
+fun Context.hasCoarseLocationPermission(): Boolean = hasPermission(Manifest.permission.ACCESS_COARSE_LOCATION)
+
 /** Shows an on-device STT error message for the user. */
 fun Context.bluetoothPermissionNeeded(): Boolean =
     Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !hasPermission(Manifest.permission.BLUETOOTH_CONNECT)

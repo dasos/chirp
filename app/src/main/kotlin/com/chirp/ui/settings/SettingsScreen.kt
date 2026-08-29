@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import com.chirp.ui.permissions.hasCoarseLocationPermission
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -222,7 +223,7 @@ private fun SettingsContent(
 
         HorizontalDivider()
 
-        SectionTitle("System prompt")
+        SectionTitle("Context & System Prompt")
         OutlinedTextField(
             value = systemPrompt,
             onValueChange = { systemPrompt = it; onUpdate { s -> s.copy(systemPrompt = it) } },
@@ -230,6 +231,61 @@ private fun SettingsContent(
             minLines = 3,
             modifier = Modifier.fillMaxWidth(),
         )
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f).padding(end = 16.dp)) {
+                Text("Include current date & time", style = MaterialTheme.typography.bodyLarge)
+                Text(
+                    "Provides device date, time, and timezone to the model",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Switch(
+                checked = settings.includeDateTime,
+                onCheckedChange = { onUpdate { s -> s.copy(includeDateTime = it) } },
+            )
+        }
+
+        val context = androidx.compose.ui.platform.LocalContext.current
+        val locationPermissionLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+            contract = androidx.activity.result.contract.ActivityResultContracts.RequestPermission(),
+        ) { isGranted ->
+            onUpdate { s -> s.copy(includeLocation = isGranted) }
+        }
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f).padding(end = 16.dp)) {
+                Text("Include approximate location", style = MaterialTheme.typography.bodyLarge)
+                Text(
+                    "Provides general city/region context to help with local queries",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Switch(
+                checked = settings.includeLocation,
+                onCheckedChange = { checked ->
+                    if (checked) {
+                        if (context.hasCoarseLocationPermission()) {
+                            onUpdate { s -> s.copy(includeLocation = true) }
+                        } else {
+                            locationPermissionLauncher.launch(android.Manifest.permission.ACCESS_COARSE_LOCATION)
+                        }
+                    } else {
+                        onUpdate { s -> s.copy(includeLocation = false) }
+                    }
+                },
+            )
+        }
 
         HorizontalDivider()
 

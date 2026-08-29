@@ -26,6 +26,7 @@ import javax.inject.Singleton
 class SettingsRepository @Inject constructor(
     @ApplicationContext context: Context,
     private val connectionHolder: ConnectionConfigHolder,
+    private val locationContextProvider: com.chirp.data.location.LocationContextProvider,
     private val dispatchers: DispatcherProvider,
 ) : SettingsProvider {
 
@@ -62,14 +63,27 @@ class SettingsRepository @Inject constructor(
 
     override suspend fun current(): SessionSettings = withContext(dispatchers.io) {
         val s = read()
+        val contextPieces = buildList {
+            if (s.systemPrompt.isNotBlank()) add(s.systemPrompt)
+            if (s.includeDateTime) {
+                add(locationContextProvider.getCurrentDateTimePrompt())
+            }
+            if (s.includeLocation) {
+                locationContextProvider.getApproximateLocationPrompt()?.let { add(it) }
+            }
+        }
+        val fullPrompt = if (contextPieces.isEmpty()) null else contextPieces.joinToString("\n\n")
+
         SessionSettings(
             model = s.model,
-            systemPrompt = s.systemPrompt.ifBlank { null },
+            systemPrompt = fullPrompt,
             autoListen = s.autoListen,
             listeningTimeoutMs = s.listeningTimeoutMs,
             ttsSpeed = s.ttsSpeed,
             ttsVoiceId = s.ttsVoiceId,
             webSearch = s.webSearch,
+            includeDateTime = s.includeDateTime,
+            includeLocation = s.includeLocation,
         )
     }
 
@@ -94,6 +108,8 @@ class SettingsRepository @Inject constructor(
             putBoolean(KEY_START_LISTENING_ON_NEW_CONVERSATION, updated.startListeningOnNewConversation)
             putLong(KEY_LISTEN_TIMEOUT, updated.listeningTimeoutMs)
             putBoolean(KEY_WEB_SEARCH, updated.webSearch)
+            putBoolean(KEY_INCLUDE_DATE_TIME, updated.includeDateTime)
+            putBoolean(KEY_INCLUDE_LOCATION, updated.includeLocation)
         }.apply()
         updateConnectionHolder()
     }
@@ -114,6 +130,8 @@ class SettingsRepository @Inject constructor(
         ),
         listeningTimeoutMs = prefs.getLong(KEY_LISTEN_TIMEOUT, 2_000L),
         webSearch = prefs.getBoolean(KEY_WEB_SEARCH, false),
+        includeDateTime = prefs.getBoolean(KEY_INCLUDE_DATE_TIME, true),
+        includeLocation = prefs.getBoolean(KEY_INCLUDE_LOCATION, false),
     )
 
     private fun updateConnectionHolder() = connectionHolder.update(connectionConfig())
@@ -132,5 +150,7 @@ class SettingsRepository @Inject constructor(
         private const val KEY_START_LISTENING_ON_NEW_CONVERSATION = "start_listening_on_new_conversation"
         private const val KEY_LISTEN_TIMEOUT = "listen_timeout"
         private const val KEY_WEB_SEARCH = "web_search"
+        private const val KEY_INCLUDE_DATE_TIME = "include_date_time"
+        private const val KEY_INCLUDE_LOCATION = "include_location"
     }
 }

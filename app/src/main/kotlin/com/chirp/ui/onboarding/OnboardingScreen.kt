@@ -1,7 +1,10 @@
 package com.chirp.ui.onboarding
 
-import androidx.compose.foundation.clickable
+import android.Manifest
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -23,10 +26,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DockedSearchBar
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
@@ -34,6 +38,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -48,6 +53,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -58,9 +64,10 @@ import com.chirp.R
 import com.chirp.core.chat.ChatClient
 import com.chirp.core.chat.ChatModel
 import com.chirp.data.settings.SettingsRepository
+import com.chirp.ui.permissions.hasCoarseLocationPermission
 import kotlinx.coroutines.launch
 
-private const val PAGE_COUNT = 3
+private const val PAGE_COUNT = 4
 private const val MAX_MODELS_SHOWN = 100
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -84,10 +91,15 @@ fun OnboardingScreen(
     var modelsError by remember { mutableStateOf<String?>(null) }
     var manualModelId by remember { mutableStateOf("") }
     var isManualEntry by remember { mutableStateOf(false) }
+    var includeDateTime by remember { mutableStateOf(true) }
+    var includeLocation by remember { mutableStateOf(false) }
     var saving by remember { mutableStateOf(false) }
 
     LaunchedEffect(savedSettings) {
-        if (apiKey.isBlank()) apiKey = savedSettings?.apiKey.orEmpty()
+        val s = savedSettings ?: return@LaunchedEffect
+        if (apiKey.isBlank()) apiKey = s.apiKey
+        includeDateTime = s.includeDateTime
+        includeLocation = s.includeLocation
     }
 
     LaunchedEffect(currentPage) {
@@ -151,7 +163,13 @@ fun OnboardingScreen(
                                 }
                             },
                         )
-                        2 -> DonePage()
+                        2 -> ContextPage(
+                            includeDateTime = includeDateTime,
+                            onIncludeDateTimeChange = { includeDateTime = it },
+                            includeLocation = includeLocation,
+                            onIncludeLocationChange = { includeLocation = it },
+                        )
+                        3 -> DonePage()
                     }
                 }
             }
@@ -245,6 +263,35 @@ fun OnboardingScreen(
                     }
                 }
                 2 -> {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        OutlinedButton(
+                            onClick = { currentPage = 1 },
+                            modifier = Modifier.weight(1f),
+                        ) {
+                            Text("Back")
+                        }
+                        Button(
+                            onClick = {
+                                scope.launch {
+                                    settingsRepository.update {
+                                        it.copy(
+                                            includeDateTime = includeDateTime,
+                                            includeLocation = includeLocation,
+                                        )
+                                    }
+                                    currentPage = 3
+                                }
+                            },
+                            modifier = Modifier.weight(1f),
+                        ) {
+                            Text("Next")
+                        }
+                    }
+                }
+                3 -> {
                     Row(
                         modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp),
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -495,6 +542,130 @@ private fun ModelPage(
 }
 
 @Composable
+private fun ContextPage(
+    includeDateTime: Boolean,
+    onIncludeDateTimeChange: (Boolean) -> Unit,
+    includeLocation: Boolean,
+    onIncludeLocationChange: (Boolean) -> Unit,
+) {
+    val context = LocalContext.current
+    val permissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission(),
+    ) { isGranted ->
+        onIncludeLocationChange(isGranted)
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState()),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Spacer(Modifier.height(32.dp))
+
+        Text(
+            "Guide the assistant",
+            style = MaterialTheme.typography.headlineMedium,
+            fontWeight = FontWeight.Bold,
+            textAlign = TextAlign.Center,
+        )
+
+        Spacer(Modifier.height(12.dp))
+
+        Text(
+            "Choose optional context to share with the AI to make answers more relevant. You can change these anytime in Settings.",
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+        )
+
+        Spacer(Modifier.height(32.dp))
+
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+            ),
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(20.dp),
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onIncludeDateTimeChange(!includeDateTime) },
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(modifier = Modifier.weight(1f).padding(end = 16.dp)) {
+                        Text(
+                            "Current date and time",
+                            style = MaterialTheme.typography.titleMedium,
+                        )
+                        Text(
+                            "Shares your device's current date, time, and timezone with the model so it can answer time-relative questions accurately.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Switch(
+                        checked = includeDateTime,
+                        onCheckedChange = onIncludeDateTimeChange,
+                    )
+                }
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable {
+                            if (!includeLocation) {
+                                if (context.hasCoarseLocationPermission()) {
+                                    onIncludeLocationChange(true)
+                                } else {
+                                    permissionLauncher.launch(Manifest.permission.ACCESS_COARSE_LOCATION)
+                                }
+                            } else {
+                                onIncludeLocationChange(false)
+                            }
+                        },
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(modifier = Modifier.weight(1f).padding(end = 16.dp)) {
+                        Text(
+                            "Approximate location",
+                            style = MaterialTheme.typography.titleMedium,
+                        )
+                        Text(
+                            "Shares your approximate, general location (city or region only, not precise coordinates) to tailor weather, news, and local queries.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Switch(
+                        checked = includeLocation,
+                        onCheckedChange = { checked ->
+                            if (checked) {
+                                if (context.hasCoarseLocationPermission()) {
+                                    onIncludeLocationChange(true)
+                                } else {
+                                    permissionLauncher.launch(Manifest.permission.ACCESS_COARSE_LOCATION)
+                                }
+                            } else {
+                                onIncludeLocationChange(false)
+                            }
+                        },
+                    )
+                }
+            }
+        }
+
+        Spacer(Modifier.height(24.dp))
+    }
+}
+
+@Composable
 private fun DonePage() {
     Column(
         modifier = Modifier
@@ -523,7 +694,7 @@ private fun DonePage() {
         Spacer(Modifier.height(12.dp))
 
         Text(
-            "Your API key and model are configured.\nTap Start to begin your first conversation.",
+            "Your preferences are configured.\nTap Start to begin your first conversation.",
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
