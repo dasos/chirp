@@ -1,4 +1,31 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Chirp</string>
+
+    <!-- Active conversation notification -->
+    <string name="notification_starting_title">Starting…</string>
+    <string name="notification_starting_content">Starting…</string>
+    <string name="notification_idle_title">Chirp</string>
+    <string name="notification_listening_title">Listening…</string>
+    <string name="notification_thinking_title">Thinking…</string>
+    <string name="notification_speaking_title">Speaking…</string>
+    <string name="notification_paused_title">Chirp</string>
+    <string name="notification_error_title">Connection problem</string>
+
+    <string name="notification_transcript_quoted">“%1$s”</string>
+    <string name="notification_listening_content">Listening…</string>
+    <string name="notification_thinking_content">Waiting for the model…</string>
+    <string name="notification_speaking_content">Speaking…</string>
+    <string name="notification_paused_content">Tap the mic to continue.</string>
+    <string name="notification_idle_content">Tap to open the conversation.</string>
+    <string name="notification_error_content">Something went wrong.</string>
+
+    <string name="notification_action_stop">Stop</string>
+    <string name="notification_action_stop_speaking">Stop speaking</string>
+
+    <!-- Standby "Continue conversation?" prompt -->
+    <string name="notification_standby_title">Continue conversation?</string>
+    <string name="notification_standby_content">Tap to resume your voice session.</string>
+    <string name="notification_action_resume">Resume</string>
+    <string name="notification_action_end">End</string>
 </resources>
