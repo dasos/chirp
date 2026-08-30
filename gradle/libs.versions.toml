@@ -83,6 +83,7 @@ androidx-wear-compose = { group = "androidx.wear.compose", name = "compose-found
 androidx-wear-compose-material = { group = "androidx.wear.compose", name = "compose-material", version.ref = "wearComposeMaterial" }
 androidx-wear-compose-navigation = { group = "androidx.wear.compose", name = "compose-navigation", version.ref = "wearCompose" }
 androidx-wear-tiles = { group = "androidx.wear.tiles", name = "tiles", version.ref = "wearTiles" }
+androidx-concurrent-futures = { group = "androidx.concurrent", name = "concurrent-futures", version = "1.1.0" }
 androidx-activity-wear-compose = { group = "androidx.activity", name = "activity-compose", version.ref = "activityComposeWear" }
 
 # Coroutines / serialization / network

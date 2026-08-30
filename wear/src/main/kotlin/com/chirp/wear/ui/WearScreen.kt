@@ -23,9 +23,9 @@ import androidx.wear.compose.material.MaterialTheme
 import androidx.wear.compose.material.Scaffold
 import androidx.wear.compose.material.Text
 import androidx.wear.compose.material.TimeText
-import androidx.wear.compose.material.icons.Icons
-import androidx.wear.compose.material.icons.basic.Mic
-import androidx.wear.compose.material.icons.basic.Stop
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.Stop
 import com.chirp.core.session.SessionPhase
 import com.chirp.core.session.SessionState
 
@@ -60,7 +60,7 @@ fun WearScreen(
                 ),
             ) {
                 Icon(
-                    imageVector = if (interrupting) Icons.Stop else Icons.Mic,
+                    imageVector = if (interrupting) Icons.Filled.Stop else Icons.Filled.Mic,
                     contentDescription = null,
                     modifier = Modifier.size(44.dp),
                     tint = MaterialTheme.colors.onPrimary,
@@ -69,7 +69,7 @@ fun WearScreen(
 
             Text(
                 text = hint(state),
-                style = MaterialTheme.typography.labelMedium,
+                style = MaterialTheme.typography.caption2,
                 maxLines = 3,
                 overflow = TextOverflow.Ellipsis,
                 textAlign = TextAlign.Center,
@@ -86,7 +86,7 @@ private fun StatusPill(text: String) {
             .background(color = MaterialTheme.colors.primary, shape = CircleShape)
             .padding(horizontal = 12.dp, vertical = 4.dp),
     ) {
-        Text(text = text, color = MaterialTheme.colors.onPrimary, style = MaterialTheme.typography.labelMedium)
+        Text(text = text, color = MaterialTheme.colors.onPrimary, style = MaterialTheme.typography.caption2)
     }
 }
 

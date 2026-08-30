@@ -53,11 +53,13 @@ dependencies {
 
     // Tiles
     implementation(libs.androidx.wear.tiles)
+    implementation(libs.androidx.concurrent.futures)
 
     // Compose (from the shared BOM)
     implementation(platform(libs.androidx.compose.bom))
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-tooling-preview")
+    implementation(libs.androidx.compose.material.icons.extended)
     debugImplementation("androidx.compose.ui:ui-tooling")
 
     // Misc

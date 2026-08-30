@@ -7,7 +7,6 @@ import com.chirp.core.util.DispatcherProvider
 import com.chirp.core.wear.WearContract
 import com.chirp.data.settings.SettingsRepository
 import com.google.android.gms.wearable.DataClient
-import com.google.android.gms.wearable.DataItem
 import com.google.android.gms.wearable.PutDataRequest
 import com.google.android.gms.wearable.Wearable
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -59,7 +58,7 @@ class WearDataSync @Inject constructor(
 
     private fun publish(state: SessionState, startListeningOnNewConversation: Boolean) {
         val bytes = WearContract.encodeState(state, startListeningOnNewConversation)
-        val request = DataClient.PutDataRequest.create(WearContract.PATH_STATE)
+        val request = PutDataRequest.create(WearContract.PATH_STATE)
             .setData(bytes)
         dataClient.putDataItem(request).addOnFailureListener {
             // No Throwable: rely on Data Layer retrying/re-syncing; treat as silence.

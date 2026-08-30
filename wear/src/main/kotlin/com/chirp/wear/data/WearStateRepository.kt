@@ -44,7 +44,8 @@ class WearStateRepository(context: Context) : DataClient.OnDataChangedListener {
     }
 
     private fun apply(item: DataItem) {
-        val payload = WearContract.decodeStatePayload(item.data) ?: return
+        val data = item.data ?: return
+        val payload = WearContract.decodeStatePayload(data) ?: return
         _state.value = WearContract.toSessionState(payload)
         _startListeningPref.value = payload.startListeningOnNewConversation
     }

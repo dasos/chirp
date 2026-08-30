@@ -7,6 +7,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.collectAsState
 import com.chirp.core.session.SessionCommand
 import com.chirp.wear.data.WearCommandClient
+import com.chirp.wear.data.WearStateRepository
 import com.chirp.wear.ui.ChirpWearTheme
 import com.chirp.wear.ui.WearScreen
 import kotlinx.coroutines.CoroutineScope
