@@ -53,7 +53,6 @@ dependencies {
 
     // Tiles
     implementation(libs.androidx.wear.tiles)
-    implementation(libs.androidx.wear.tooling.preview)
 
     // Compose (from the shared BOM)
     implementation(platform(libs.androidx.compose.bom))
