@@ -2,6 +2,7 @@ package com.chirp.wear.tile
 
 import android.content.Context
 import androidx.concurrent.futures.ResolvableFuture
+import androidx.wear.protolayout.DimensionBuilders.dp
 import androidx.wear.protolayout.ActionBuilders
 import androidx.wear.protolayout.LayoutElementBuilders
 import androidx.wear.protolayout.ModifiersBuilders
@@ -10,6 +11,7 @@ import androidx.wear.protolayout.TimelineBuilders
 import androidx.wear.tiles.RequestBuilders
 import androidx.wear.tiles.TileBuilders
 import androidx.wear.tiles.TileService
+import com.chirp.wear.R
 import com.chirp.wear.WearMainActivity
 import com.google.common.util.concurrent.ListenableFuture
 
@@ -35,7 +37,19 @@ class ChirpTileService : TileService() {
     override fun onTileResourcesRequest(
         requestParams: RequestBuilders.ResourcesRequest,
     ): ListenableFuture<ResourceBuilders.Resources> {
-        val resources = ResourceBuilders.Resources.Builder().setVersion(RESOURCES_VERSION).build()
+        val resources = ResourceBuilders.Resources.Builder()
+            .setVersion(RESOURCES_VERSION)
+            .addIdToImageMapping(
+                LOGO_RESOURCE_ID,
+                ResourceBuilders.ImageResource.Builder()
+                    .setAndroidResourceByResId(
+                        ResourceBuilders.AndroidImageResourceByResId.Builder()
+                            .setResourceId(R.drawable.ic_launcher_foreground)
+                            .build(),
+                    )
+                    .build(),
+            )
+            .build()
         return ResolvableFuture.create<ResourceBuilders.Resources>().apply { set(resources) }
     }
 
@@ -53,8 +67,23 @@ class ChirpTileService : TileService() {
             .setOnClick(ActionBuilders.LaunchAction.Builder().setAndroidActivity(launch).build())
             .build()
 
+        val logo = LayoutElementBuilders.Image.Builder()
+            .setWidth(dp(48f))
+            .setHeight(dp(48f))
+            .setResourceId(LOGO_RESOURCE_ID)
+            .setModifiers(
+                ModifiersBuilders.Modifiers.Builder()
+                    .setSemantics(
+                        ModifiersBuilders.Semantics.Builder()
+                            .setContentDescription("Chirp")
+                            .build(),
+                    )
+                    .build(),
+            )
+            .build()
+
         val content = LayoutElementBuilders.Column.Builder()
-            .addContent(LayoutElementBuilders.Text.Builder().setText("Chirp").build())
+            .addContent(logo)
             .addContent(LayoutElementBuilders.Text.Builder().setText("Tap to talk").build())
             .build()
 
@@ -70,6 +99,7 @@ class ChirpTileService : TileService() {
     }
 
     private companion object {
-        const val RESOURCES_VERSION = "1"
+        const val LOGO_RESOURCE_ID = "chirp_logo"
+        const val RESOURCES_VERSION = "2"
     }
 }
