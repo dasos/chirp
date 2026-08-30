@@ -104,7 +104,7 @@ private fun statusText(state: SessionState?): String? = when {
 }
 
 private fun hint(state: SessionState?): String = when {
-    state == null -> "No phone connected"
+    state == null -> "No phone connected — tap mic to start"
     !state.active -> "Tap mic to start"
     state.isListening ->
         state.partialTranscript.ifBlank { "Listening…" }

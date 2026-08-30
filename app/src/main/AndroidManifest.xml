@@ -62,6 +62,9 @@
             <intent-filter>
                 <action android:name="com.google.android.gms.wearable.BIND_LISTENER" />
             </intent-filter>
+            <meta-data
+                android:name="com.google.android.gms.wearable.capability.chirp_phone_session"
+                android:value="true" />
         </service>
 
         <!-- Routes headset media buttons to the active MediaSessionCompat. -->
