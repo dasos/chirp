@@ -60,11 +60,12 @@
             android:name=".wear.PhoneWearMessageService"
             android:exported="true">
             <intent-filter>
-                <action android:name="com.google.android.gms.wearable.BIND_LISTENER" />
+                <action android:name="com.google.android.gms.wearable.MESSAGE_RECEIVED" />
+                <data
+                    android:scheme="wear"
+                    android:host="*"
+                    android:path="/chirp/command" />
             </intent-filter>
-            <meta-data
-                android:name="com.google.android.gms.wearable.capability.chirp_phone_session"
-                android:value="true" />
         </service>
 
         <!-- Routes headset media buttons to the active MediaSessionCompat. -->

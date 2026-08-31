@@ -1,5 +1,7 @@
 package com.chirp.wear
 
+import androidx.core.content.ContextCompat
+import com.chirp.core.session.SessionCommand
 import com.chirp.core.wear.WearContract
 import com.chirp.service.ConversationService
 import com.google.android.gms.wearable.MessageEvent
@@ -17,6 +19,10 @@ class PhoneWearMessageService : WearableListenerService() {
         if (messageEvent.path != WearContract.PATH_COMMAND) return
         val command = WearContract.decodeCommand(messageEvent.data) ?: return
         val intent = ConversationService.intentForWearCommand(this, command) ?: return
-        startService(intent)
+        if (command is SessionCommand.Start) {
+            ContextCompat.startForegroundService(this, intent)
+        } else {
+            startService(intent)
+        }
     }
 }
