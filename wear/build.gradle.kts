@@ -9,6 +9,16 @@ android {
     namespace = "com.chirp.wear"
     compileSdk = 35
 
+    signingConfigs {
+        create("ci") {
+            // Reuse the phone app's keystore so upgrades retain the same signer.
+            storeFile = file("../app/signing/debug.keystore")
+            storePassword = "android"
+            keyAlias = "chirp"
+            keyPassword = "android"
+        }
+    }
+
     defaultConfig {
         applicationId = "com.chirp.wear"
         minSdk = 26
@@ -18,7 +28,12 @@ android {
     }
 
     buildTypes {
+        debug {
+            signingConfig = signingConfigs.getByName("ci")
+            isMinifyEnabled = false
+        }
         release {
+            signingConfig = signingConfigs.getByName("ci")
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(
