@@ -20,11 +20,13 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.chirp.wear"
+        // Wear Data Layer identity must match the phone application ID.
+        // Keep the Kotlin namespace separate; the apps are installed on different devices.
+        applicationId = "com.chirp"
         minSdk = 26
         targetSdk = 35
-        versionCode = 6
-        versionName = "0.5.3"
+        versionCode = 7
+        versionName = "0.5.4"
     }
 
     buildTypes {
