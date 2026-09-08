@@ -18,7 +18,7 @@ stateDiagram-v2
 
     LISTENING --> THINKING: transcript submitted
     LISTENING --> LISTENING: silent re-listen\n(no-speech retries)
-    LISTENING --> PAUSED: park — 30 s of\nno speech / focus loss / hold
+    LISTENING --> PAUSED: park — sustained silence\n(configurable) / 30 s ceiling /\nfocus loss / hold
     LISTENING --> [*]: stop()
 
     THINKING --> SPEAKING: first sentence spoken
@@ -93,7 +93,13 @@ the same `conversationId` rather than a wake-up of a hot loop..
 - Android requires a foreground service to show a notification for its whole
   lifetime — so "notification gone" ⇔ "session over"/standby handover; there is
   no way to keep a session alive with no card..
-- Listening never stays hot forever: each `LISTENING` window caps at
-  `LISTENING_SILENCE_TIMEOUT_MS` (30 s) of no recognized speech, then parks..
+- Listening never stays hot forever, enforced by the app itself rather than
+  trusted to the on-device recognizer. `ConversationService`'s
+  `LISTENING_SILENCE_TIMEOUT_MS` (30 s) is a fixed, non-resettable ceiling
+  anchored to when `LISTENING` is entered — the last-resort backstop behind
+  `SessionController`'s own primary silence watchdog. See
+  [`listening-timeout.md`](listening-timeout.md) for the full design
+  (what counts as "silence," why it's a two-layer setup, and known
+  limitations).
 - The standby prompt never outlives 5 minutes; End, swipe, or the alarm all
   end the parked session state in the controller too..

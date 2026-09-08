@@ -11,11 +11,14 @@ import com.chirp.core.speech.SttEvent
 import com.chirp.core.util.Clock
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestDispatcher
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -329,6 +332,73 @@ class SessionControllerTest {
         val assistant = store.messages.first { it.role == Role.ASSISTANT }
         assertEquals("Full answer completed.", assistant.text)
         assertFalse(assistant.text.endsWith("…"))
+
+        controller.shutdown()
+    }
+
+    @Test
+    fun `listening times out and parks when the recognizer never calls back`() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val tts = FakeTextToSpeech()
+        // Simulates the real-world failure mode: continuous background noise
+        // keeps the recognizer from ever finalizing (no FinalResult, no Error) —
+        // the app must give up on its own rather than listen forever.
+        val stt = object : SpeechToTextEngine {
+            override suspend fun isAvailable(): Boolean = true
+            override fun listen(config: SttConfig): Flow<SttEvent> = flow { awaitCancellation() }
+        }
+        val controller = newController(
+            dispatcher, FakeChatClient(), tts = tts, stt = stt,
+            settings = SessionSettings(
+                model = "m", systemPrompt = null, autoListen = true,
+                listeningTimeoutMs = 100L, maxNoMatchRetries = 0,
+            ),
+        )
+
+        controller.start(null)
+        advanceUntilIdle()
+
+        assertEquals(SessionPhase.PAUSED, controller.state.value.phase)
+        assertEquals("I didn't catch that. Tap the mic when you're ready.", tts.spoken.last())
+
+        controller.shutdown()
+    }
+
+    @Test
+    fun `spaced partial results keep listening alive; sustained silence still ends it`() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val tts = FakeTextToSpeech()
+        // Three partials 80ms apart, each inside the 100ms deadline, then
+        // silence: listening should survive well past a single 100ms window
+        // (proving the debounce doesn't cut off genuine ongoing speech) but
+        // still give up once real silence exceeds the deadline.
+        val stt = object : SpeechToTextEngine {
+            override suspend fun isAvailable(): Boolean = true
+            override fun listen(config: SttConfig): Flow<SttEvent> = flow {
+                emit(SttEvent.PartialResult("uh"))
+                delay(80L)
+                emit(SttEvent.PartialResult("uh, um"))
+                delay(80L)
+                emit(SttEvent.PartialResult("uh, um, hmm"))
+                awaitCancellation()
+            }
+        }
+        val controller = newController(
+            dispatcher, FakeChatClient(), tts = tts, stt = stt,
+            settings = SessionSettings(
+                model = "m", systemPrompt = null, autoListen = true,
+                listeningTimeoutMs = 100L, maxNoMatchRetries = 0,
+            ),
+        )
+
+        controller.start(null)
+        advanceTimeBy(190L)
+        runCurrent()
+        assertEquals(SessionPhase.LISTENING, controller.state.value.phase)
+
+        advanceUntilIdle()
+        assertEquals(SessionPhase.PAUSED, controller.state.value.phase)
+        assertEquals("I didn't catch that. Tap the mic when you're ready.", tts.spoken.last())
 
         controller.shutdown()
     }

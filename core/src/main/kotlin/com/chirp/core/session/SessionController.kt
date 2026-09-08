@@ -25,6 +25,8 @@ import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -304,16 +306,44 @@ class SessionController @Inject constructor(
             error = null
             finalText = null
             try {
-                stt.listen(SttConfig(silenceTimeoutMs = s.listeningTimeoutMs)).collect { event ->
-                    when (event) {
-                        is SttEvent.PartialResult -> _state.update { it.copy(partialTranscript = event.text) }
-                        is SttEvent.RmsChanged -> _state.update { it.copy(rms = event.rms) }
-                        is SttEvent.FinalResult -> finalText = event.text
-                        is SttEvent.Error -> error = event.type
-                        SttEvent.ReadyForSpeech,
-                        SttEvent.BeginningOfSpeech,
-                        SttEvent.EndOfSpeech -> Unit
+                // The recognizer's own silence-timeout extras are advisory and
+                // often ignored by the platform, so we enforce the configured
+                // timeout ourselves: a watchdog races s.listeningTimeoutMs
+                // against PartialResult activity and force-ends the attempt as
+                // a SPEECH_TIMEOUT if nothing new arrives in time. This is the
+                // only thing standing between a recognizer that never calls
+                // back (common with continuous background noise) and the mic
+                // staying hot forever.
+                val activity = Channel<Unit>(Channel.CONFLATED)
+                coroutineScope {
+                    val collectJob = launch {
+                        stt.listen(SttConfig(silenceTimeoutMs = s.listeningTimeoutMs)).collect { event ->
+                            when (event) {
+                                is SttEvent.PartialResult -> {
+                                    _state.update { it.copy(partialTranscript = event.text) }
+                                    activity.trySend(Unit)
+                                }
+                                is SttEvent.RmsChanged -> _state.update { it.copy(rms = event.rms) }
+                                is SttEvent.FinalResult -> finalText = event.text
+                                is SttEvent.Error -> error = event.type
+                                SttEvent.ReadyForSpeech,
+                                SttEvent.BeginningOfSpeech,
+                                SttEvent.EndOfSpeech -> Unit
+                            }
+                        }
                     }
+                    val watchdog = launch {
+                        while (isActive) {
+                            val heardActivity = withTimeoutOrNull(s.listeningTimeoutMs) { activity.receive() } != null
+                            if (!heardActivity) {
+                                error = SttError.SPEECH_TIMEOUT
+                                collectJob.cancel()
+                                break
+                            }
+                        }
+                    }
+                    collectJob.join()
+                    watchdog.cancel()
                 }
             } catch (c: CancellationException) {
                 throw c

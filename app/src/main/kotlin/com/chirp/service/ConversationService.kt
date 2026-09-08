@@ -36,8 +36,10 @@ import javax.inject.Inject
  * Notification lifecycle:
  * - While the session is live (LISTENING/THINKING/SPEAKING/PAUSED) an ongoing
  *   foreground card tracks the state; it is removed when the session stops..
- * - Listening is capped: after [LISTENING_SILENCE_TIMEOUT_MS] of no speech the
- *   mic parks; parking from an active phase (or focus/headset hold) tears the
+ * - Listening is capped: [LISTENING_SILENCE_TIMEOUT_MS] after entering LISTENING
+ *   is a fixed last-resort ceiling (SessionController's own watchdog is the
+ *   primary cap and normally fires first); parking from an active phase (or
+ *   focus/headset hold) tears the
  *   FGS down and hands over to the "Continue conversation?" standby prompt,
  *   which auto-dismisses (and ends the parked session) after
  *   [STANDBY_TIMEOUT_MS].
@@ -57,7 +59,7 @@ class ConversationService : LifecycleService() {
     private var lastNotifyAt = 0L
     private var idleTimeoutJob: Job? = null
 
-    /** Counts down the capped listening window; see [LISTENING_SILENCE_TIMEOUT_MS]. */
+    /** Counts down the fixed listening ceiling; see [LISTENING_SILENCE_TIMEOUT_MS]. */
     private var silentListenJob: Job? = null
 
     private val focusCallback = object : AudioRouteManager.FocusCallback {
@@ -217,20 +219,22 @@ class ConversationService : LifecycleService() {
                 }
 
 
-                // Cap each listening window: park after a sustained silence so the
-                // mic never stays hot forever. (The controller's own no-match
-                // retries still run first; this is the safety net when the recognizer
-                // never trips an error.)
-                val silentListening = phase == SessionPhase.LISTENING && state.partialTranscript.isBlank()
-                if (silentListening && silentListenJob == null) {
+                // Cap each listening window: park after a fixed ceiling so the mic
+                // never stays hot forever. This is the last-resort backstop —
+                // SessionController's own watchdog (driven by the "Listening
+                // silence timeout" setting) is the primary enforcement and
+                // normally ends listening well before this fires. Anchored to
+                // *entering* LISTENING, not to partialTranscript activity: a
+                // stray noise-driven partial result must never cancel/reset this
+                // timer, or it could never fire at all.
+                val enteringListening = phase == SessionPhase.LISTENING && lastPhase != SessionPhase.LISTENING
+                val leavingListening = lastPhase == SessionPhase.LISTENING && phase != SessionPhase.LISTENING
+                if (enteringListening && silentListenJob == null) {
 
 
                     silentListenJob = lifecycleScope.launch {
                         delay(LISTENING_SILENCE_TIMEOUT_MS)
-                        val current = controller.state.value
-                        if (started && current.phase == SessionPhase.LISTENING &&
-                            current.partialTranscript.isBlank()
-                        ) {
+                        if (started && controller.state.value.phase == SessionPhase.LISTENING) {
 
 
 
@@ -239,7 +243,7 @@ class ConversationService : LifecycleService() {
                             controller.park()
                         }
                     }
-                } else if (!silentListening) {
+                } else if (leavingListening) {
 
 
 

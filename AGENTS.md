@@ -109,6 +109,11 @@ server tool; search runs server-side and never interrupts the token stream.
   — keep any new start path gated too.
 - `SpeechRecognizer` must be created/driven on the **main thread**
   (`AndroidSpeechToText` posts to the main `Handler`). Don't call it off-main.
+- The recognizer's own silence-timeout extras are advisory and frequently
+  ignored by the platform — `SessionController.listenOnce()` enforces the
+  "Listening silence timeout" setting itself via a watchdog, with a fixed 30 s
+  non-resettable ceiling in `ConversationService` as a last resort. See
+  `docs/listening-timeout.md` before touching either.
 - Bluetooth: SCO stays on for the whole session (mic-routing priority). TTS routing
   switches between `USAGE_VOICE_COMMUNICATION` (SCO) and `USAGE_MEDIA` (no headset)
   via `AudioRouteManager.isBluetoothHeadsetConnected()` →
