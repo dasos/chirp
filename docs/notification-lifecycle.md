@@ -97,7 +97,7 @@ the same `conversationId` rather than a wake-up of a hot loop..
   trusted to the on-device recognizer. `ConversationService`'s
   `LISTENING_SILENCE_TIMEOUT_MS` (30 s) is a fixed, non-resettable ceiling
   anchored to when `LISTENING` is entered — the last-resort backstop behind
-  `SessionController`'s own primary silence watchdog. See
+  `AndroidSpeechToText`/`SttTurnWindow`'s own primary silence enforcement. See
   [`listening-timeout.md`](listening-timeout.md) for the full design
   (what counts as "silence," why it's a two-layer setup, and known
   limitations).
