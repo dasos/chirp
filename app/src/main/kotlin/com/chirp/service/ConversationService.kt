@@ -37,9 +37,9 @@ import javax.inject.Inject
  * - While the session is live (LISTENING/THINKING/SPEAKING/PAUSED) an ongoing
  *   foreground card tracks the state; it is removed when the session stops..
  * - Listening is capped: [LISTENING_SILENCE_TIMEOUT_MS] after entering LISTENING
- *   is a fixed last-resort ceiling (SessionController's own watchdog is the
- *   primary cap and normally fires first); parking from an active phase (or
- *   focus/headset hold) tears the
+ *   is a fixed last-resort ceiling (AndroidSpeechToText/SttTurnWindow's own
+ *   silence enforcement is the primary cap and normally fires first); parking
+ *   from an active phase (or focus/headset hold) tears the
  *   FGS down and hands over to the "Continue conversation?" standby prompt,
  *   which auto-dismisses (and ends the parked session) after
  *   [STANDBY_TIMEOUT_MS].
@@ -221,12 +221,13 @@ class ConversationService : LifecycleService() {
 
                 // Cap each listening window: park after a fixed ceiling so the mic
                 // never stays hot forever. This is the last-resort backstop —
-                // SessionController's own watchdog (driven by the "Listening
-                // silence timeout" setting) is the primary enforcement and
-                // normally ends listening well before this fires. Anchored to
-                // *entering* LISTENING, not to partialTranscript activity: a
-                // stray noise-driven partial result must never cancel/reset this
-                // timer, or it could never fire at all.
+                // AndroidSpeechToText/SttTurnWindow's own silence enforcement
+                // (driven by the "Listening silence timeout" setting) is the
+                // primary mechanism and normally ends listening well before this
+                // fires. Anchored to *entering* LISTENING, not to
+                // partialTranscript activity: a stray noise-driven partial
+                // result must never cancel/reset this timer, or it could never
+                // fire at all.
                 val enteringListening = phase == SessionPhase.LISTENING && lastPhase != SessionPhase.LISTENING
                 val leavingListening = lastPhase == SessionPhase.LISTENING && phase != SessionPhase.LISTENING
                 if (enteringListening && silentListenJob == null) {
