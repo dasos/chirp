@@ -50,7 +50,11 @@ jobs:
           distribution: temurin
           java-version: '17'
       # Installs the Android command-line tools and accepts SDK licenses.
+      # Keep the package list explicit: the action's legacy default includes
+      # the removed `tools` package, which makes sdkmanager fail.
       - uses: android-actions/setup-android@v4
+        with:
+          packages: 'platform-tools'
       - name: Install required SDK packages
         run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
       - uses: gradle/actions/setup-gradle@v6
