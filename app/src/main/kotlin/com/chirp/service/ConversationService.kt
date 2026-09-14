@@ -11,7 +11,6 @@ import androidx.core.app.ServiceCompat
 import androidx.lifecycle.LifecycleService
 import androidx.lifecycle.lifecycleScope
 import com.chirp.audio.AudioRouteManager
-import com.chirp.audio.MediaSessionController
 import com.chirp.core.session.SessionCommand
 import com.chirp.core.session.SessionPhase
 import com.chirp.core.session.SessionController
@@ -25,13 +24,13 @@ import javax.inject.Inject
 
 /**
  * Foreground service that hosts a conversation session so it survives screen-off
- * and backgrounding while walking. It owns audio focus + Bluetooth SCO routing
- * and the [MediaSessionController] (headset buttons), shows the persistent
- * notification,ánd forwards control actions to the singleton [SessionController].
+ * and backgrounding while walking. It owns audio focus + Bluetooth SCO routing,
+ * shows the persistent notification, and forwards control actions to the singleton
+ * [SessionController].
  *
- * Every control path — UI, notification buttons, headset media buttons and
- * (Phase 2) the Wear companion — funnels through [onStartCommand] actions, which
- * keeps a single source of truth for session control..
+ * Every control path — UI, notification buttons, and (Phase 2) the Wear companion —
+ * funnels through [onStartCommand] actions, which keeps a single source of truth
+ * for session control.
  *
  * Notification lifecycle:
  * - While the session is live (LISTENING/THINKING/SPEAKING/PAUSED) an ongoing
@@ -49,7 +48,6 @@ class ConversationService : LifecycleService() {
 
     @Inject lateinit var controller: SessionController
     @Inject lateinit var audioRouteManager: AudioRouteManager
-    @Inject lateinit var mediaSession: MediaSessionController
     @Inject lateinit var tts: AndroidTextToSpeech
     @Inject lateinit var notifications: ConversationNotification
     @Inject lateinit var wearDataSync: WearDataSync
@@ -74,17 +72,6 @@ class ConversationService : LifecycleService() {
         // user taps the mic to resume).
         override fun onTransientLoss() = Unit
         override fun onFocusGained() = Unit
-    }
-
-    private val mediaCallback = object : MediaSessionController.Callback {
-        // Play heads to the primary push-to-talk action; pause/other hold parks
-        // the session in "Ready"; stop ends it. There is no separate Pause control.
-
-
-
-        override fun onPlay() = controller.pressPrimary()
-        override fun onPause() = controller.park()
-        override fun onStop() = stopSession()
     }
 
     override fun onCreate() {
@@ -120,8 +107,6 @@ class ConversationService : LifecycleService() {
         if (!started) {
             started = true
             audioRouteManager.startSession(focusCallback)
-            mediaSession.activate(mediaCallback)
-
 
 
         }
@@ -159,12 +144,6 @@ class ConversationService : LifecycleService() {
         lifecycleScope.launch {
             controller.state.collect { state ->
 
-
-                mediaSession.setPlaying(
-                    state.phase == SessionPhase.LISTENING ||
-                        state.phase == SessionPhase.SPEAKING ||
-                        state.phase == SessionPhase.THINKING,
-                )
 
                 // User-initiated full stop: easthe session is over, no standby prompt..
                 if (started && !state.active && state.phase == SessionPhase.IDLE) {
@@ -312,7 +291,6 @@ class ConversationService : LifecycleService() {
 
         controller.stop()
         audioRouteManager.endSession()
-        mediaSession.release()
 
         started = false
         if (showStandby) {
@@ -372,7 +350,6 @@ class ConversationService : LifecycleService() {
 
     override fun onDestroy() {
         audioRouteManager.endSession()
-        mediaSession.release()
         super.onDestroy()
         // Note: they singleton SessionController is intentionally not shut down here
         // so a new session can reuse it; its scope lives for the app's lifetime..

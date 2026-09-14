@@ -1,5 +1,7 @@
 package com.chirp.audio
 
+import android.bluetooth.BluetoothManager
+import android.bluetooth.BluetoothProfile
 import android.content.Context
 import android.media.AudioAttributes
 import android.media.AudioDeviceInfo
@@ -33,6 +35,7 @@ class AudioRouteManager @Inject constructor(
     @ApplicationContext private val context: Context,
 ) {
     private val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+    private val bluetoothManager = context.getSystemService(BluetoothManager::class.java)
 
     private var focusRequest: AudioFocusRequest? = null
     private var focusCallback: FocusCallback? = null
@@ -97,8 +100,10 @@ class AudioRouteManager @Inject constructor(
     }
 
     fun isBluetoothHeadsetConnected(): Boolean =
-        audioManager.getDevices(AudioManager.GET_DEVICES_INPUTS)
-            .any { it.type == AudioDeviceInfo.TYPE_BLUETOOTH_SCO }
+        runCatching {
+            bluetoothManager?.getProfileConnectionState(BluetoothProfile.HEADSET) ==
+                BluetoothProfile.STATE_CONNECTED
+        }.getOrDefault(false)
 
     private fun requestFocus(): Boolean {
         val attributes = AudioAttributes.Builder()

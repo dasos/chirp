@@ -101,9 +101,6 @@ dependencies {
     // Encrypted settings
     implementation(libs.androidx.security.crypto)
 
-    // Media / headset buttons
-    implementation(libs.androidx.media)
-
     // Wear OS bridge (Phase 2): Data Layer + WearableListenerService
     implementation(libs.play.services.wearable)
 
