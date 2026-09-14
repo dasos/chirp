@@ -40,7 +40,11 @@ import javax.inject.Singleton
  *
  *  - [com.chirp.core.speech.SttTurnWindow] (in :core) owns the turn-level
  *    silence decision: a turn ends only after `silenceTimeoutMs` of silence
- *    since the last detected voice.
+ *    since the last detected voice. "Voice" here means recognized text — a
+ *    non-blank partial or final result — never raw mic amplitude
+ *    (`onRmsChanged`/`SttEvent.RmsChanged`), which can't tell speech apart
+ *    from ambient noise and would otherwise keep the window open forever in
+ *    a noisy environment (e.g. walking outdoors).
  *  - A recognizer session that ends early (NO_MATCH / SPEECH_TIMEOUT / early
  *    onResults) is restarted and its finalized segments are stitched, so a
  *    pause between utterances no longer cuts the turn short.
@@ -135,7 +139,11 @@ class AndroidSpeechToText @Inject constructor(
             }
 
             override fun onRmsChanged(rmsdB: Float) {
-                if (rmsdB >= VOICE_RMS_THRESHOLD_DB) window.onVoice(SystemClock.elapsedRealtime())
+                // Deliberately does NOT reset the silence window: raw mic
+                // amplitude can't distinguish speech from ambient noise (wind,
+                // traffic), so treating it as "voice" let background noise keep
+                // the window open indefinitely outdoors. Only recognized text
+                // (below, and in onResults) counts as voice.
                 trySend(SttEvent.RmsChanged(rmsdB))
             }
 
@@ -263,9 +271,6 @@ class AndroidSpeechToText @Inject constructor(
 
     companion object {
         private const val TAG = "AndroidSpeechToText"
-
-        /** RMS (dB) below which the input counts as silence for the watchdog. */
-        private const val VOICE_RMS_THRESHOLD_DB = 4.0f
 
         /** How often the watchdog rechecks the silence deadline. */
         private val SILENCE_POLL_MS = 200.milliseconds

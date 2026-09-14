@@ -11,7 +11,6 @@ import androidx.core.app.ServiceCompat
 import androidx.lifecycle.LifecycleService
 import androidx.lifecycle.lifecycleScope
 import com.chirp.audio.AudioRouteManager
-import com.chirp.audio.MediaSessionController
 import com.chirp.core.session.SessionCommand
 import com.chirp.core.session.SessionPhase
 import com.chirp.core.session.SessionController
@@ -25,19 +24,21 @@ import javax.inject.Inject
 
 /**
  * Foreground service that hosts a conversation session so it survives screen-off
- * and backgrounding while walking. It owns audio focus + Bluetooth SCO routing
- * and the [MediaSessionController] (headset buttons), shows the persistent
- * notification,ánd forwards control actions to the singleton [SessionController].
+ * and backgrounding while walking. It owns audio focus + Bluetooth SCO routing,
+ * shows the persistent notification, and forwards control actions to the singleton
+ * [SessionController].
  *
- * Every control path — UI, notification buttons, headset media buttons and
- * (Phase 2) the Wear companion — funnels through [onStartCommand] actions, which
- * keeps a single source of truth for session control..
+ * Every control path — UI, notification buttons, and (Phase 2) the Wear companion —
+ * funnels through [onStartCommand] actions, which keeps a single source of truth
+ * for session control.
  *
  * Notification lifecycle:
  * - While the session is live (LISTENING/THINKING/SPEAKING/PAUSED) an ongoing
  *   foreground card tracks the state; it is removed when the session stops..
- * - Listening is capped: after [LISTENING_SILENCE_TIMEOUT_MS] of no speech the
- *   mic parks; parking from an active phase (or focus/headset hold) tears the
+ * - Listening is capped: [LISTENING_SILENCE_TIMEOUT_MS] after entering LISTENING
+ *   is a fixed last-resort ceiling (AndroidSpeechToText/SttTurnWindow's own
+ *   silence enforcement is the primary cap and normally fires first); parking
+ *   from an active phase (or focus/headset hold) tears the
  *   FGS down and hands over to the "Continue conversation?" standby prompt,
  *   which auto-dismisses (and ends the parked session) after
  *   [STANDBY_TIMEOUT_MS].
@@ -47,7 +48,6 @@ class ConversationService : LifecycleService() {
 
     @Inject lateinit var controller: SessionController
     @Inject lateinit var audioRouteManager: AudioRouteManager
-    @Inject lateinit var mediaSession: MediaSessionController
     @Inject lateinit var tts: AndroidTextToSpeech
     @Inject lateinit var notifications: ConversationNotification
     @Inject lateinit var wearDataSync: WearDataSync
@@ -57,7 +57,7 @@ class ConversationService : LifecycleService() {
     private var lastNotifyAt = 0L
     private var idleTimeoutJob: Job? = null
 
-    /** Counts down the capped listening window; see [LISTENING_SILENCE_TIMEOUT_MS]. */
+    /** Counts down the fixed listening ceiling; see [LISTENING_SILENCE_TIMEOUT_MS]. */
     private var silentListenJob: Job? = null
 
     private val focusCallback = object : AudioRouteManager.FocusCallback {
@@ -72,17 +72,6 @@ class ConversationService : LifecycleService() {
         // user taps the mic to resume).
         override fun onTransientLoss() = Unit
         override fun onFocusGained() = Unit
-    }
-
-    private val mediaCallback = object : MediaSessionController.Callback {
-        // Play heads to the primary push-to-talk action; pause/other hold parks
-        // the session in "Ready"; stop ends it. There is no separate Pause control.
-
-
-
-        override fun onPlay() = controller.pressPrimary()
-        override fun onPause() = controller.park()
-        override fun onStop() = stopSession()
     }
 
     override fun onCreate() {
@@ -118,8 +107,6 @@ class ConversationService : LifecycleService() {
         if (!started) {
             started = true
             audioRouteManager.startSession(focusCallback)
-            mediaSession.activate(mediaCallback)
-
 
 
         }
@@ -157,12 +144,6 @@ class ConversationService : LifecycleService() {
         lifecycleScope.launch {
             controller.state.collect { state ->
 
-
-                mediaSession.setPlaying(
-                    state.phase == SessionPhase.LISTENING ||
-                        state.phase == SessionPhase.SPEAKING ||
-                        state.phase == SessionPhase.THINKING,
-                )
 
                 // User-initiated full stop: easthe session is over, no standby prompt..
                 if (started && !state.active && state.phase == SessionPhase.IDLE) {
@@ -217,20 +198,23 @@ class ConversationService : LifecycleService() {
                 }
 
 
-                // Cap each listening window: park after a sustained silence so the
-                // mic never stays hot forever. (The controller's own no-match
-                // retries still run first; this is the safety net when the recognizer
-                // never trips an error.)
-                val silentListening = phase == SessionPhase.LISTENING && state.partialTranscript.isBlank()
-                if (silentListening && silentListenJob == null) {
+                // Cap each listening window: park after a fixed ceiling so the mic
+                // never stays hot forever. This is the last-resort backstop —
+                // AndroidSpeechToText/SttTurnWindow's own silence enforcement
+                // (driven by the "Listening silence timeout" setting) is the
+                // primary mechanism and normally ends listening well before this
+                // fires. Anchored to *entering* LISTENING, not to
+                // partialTranscript activity: a stray noise-driven partial
+                // result must never cancel/reset this timer, or it could never
+                // fire at all.
+                val enteringListening = phase == SessionPhase.LISTENING && lastPhase != SessionPhase.LISTENING
+                val leavingListening = lastPhase == SessionPhase.LISTENING && phase != SessionPhase.LISTENING
+                if (enteringListening && silentListenJob == null) {
 
 
                     silentListenJob = lifecycleScope.launch {
                         delay(LISTENING_SILENCE_TIMEOUT_MS)
-                        val current = controller.state.value
-                        if (started && current.phase == SessionPhase.LISTENING &&
-                            current.partialTranscript.isBlank()
-                        ) {
+                        if (started && controller.state.value.phase == SessionPhase.LISTENING) {
 
 
 
@@ -239,7 +223,7 @@ class ConversationService : LifecycleService() {
                             controller.park()
                         }
                     }
-                } else if (!silentListening) {
+                } else if (leavingListening) {
 
 
 
@@ -307,7 +291,6 @@ class ConversationService : LifecycleService() {
 
         controller.stop()
         audioRouteManager.endSession()
-        mediaSession.release()
 
         started = false
         if (showStandby) {
@@ -367,7 +350,6 @@ class ConversationService : LifecycleService() {
 
     override fun onDestroy() {
         audioRouteManager.endSession()
-        mediaSession.release()
         super.onDestroy()
         // Note: they singleton SessionController is intentionally not shut down here
         // so a new session can reuse it; its scope lives for the app's lifetime..

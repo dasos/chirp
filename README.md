@@ -47,7 +47,7 @@ Speak → on-device speech-to-text → stream the reply from the chat backend �
 - 🔒 **Your key, your rules** — the API key is stored in `EncryptedSharedPreferences`, sent as a bearer token on every request, and plaintext HTTP to non-local hosts is refused.
 - 💾 **History** — conversations and messages persist locally (Room), with auto-generated titles, swipe-to-delete, and tap-to-continue.
 - ⌨️ **Type-instead-of-speak** fallback for noisy environments.
-- 🗣️ **Spoken errors** — "Connection lost", "I didn't catch that", etc., with retry/backoff — because you're not looking at the screen.
+- 🗣️ **Spoken errors** — "Connection lost", "I didn't hear anything", etc., with retry/backoff — because you're not looking at the screen.
 - 🎨 **Polished UI** — Material 3 with dynamic color, dark mode, an animated central mic/status indicator, and haptics on listen start/stop.
 - 🧩 **Swappable speech** — STT/TTS sit behind clean interfaces, so server-side Whisper/Piper can replace the on-device engines without touching the rest of the app.
 

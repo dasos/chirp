@@ -17,9 +17,6 @@ hiltNavigationCompose = "1.2.0"
 room = "2.6.1"
 securityCrypto = "1.1.0-alpha06"
 
-# Media (headset buttons / MediaSession)
-media = "1.7.0"
-
 # Wear OS (Phase 2)
 playServicesWearable = "18.1.0"
 wearCompose = "1.4.0"
@@ -73,9 +70,6 @@ androidx-room-testing = { group = "androidx.room", name = "room-testing", versio
 
 # Settings
 androidx-security-crypto = { group = "androidx.security", name = "security-crypto", version.ref = "securityCrypto" }
-
-# Media
-androidx-media = { group = "androidx.media", name = "media", version.ref = "media" }
 
 # Wear OS (Phase 2)
 play-services-wearable = { group = "com.google.android.gms", name = "play-services-wearable", version.ref = "playServicesWearable" }

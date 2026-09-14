@@ -61,8 +61,9 @@ class SessionControllerTest {
         controller.submitText("Hello there")
         advanceUntilIdle()
 
-        // First sentence spoken from the stream, the trailing one from flush().
-        assertEquals(listOf("Hi!", "How are you?"), tts.spoken)
+        // "Thinking..." announced on entering the phase, then the streamed reply
+        // (first sentence from the stream, the trailing one from flush()).
+        assertEquals(listOf("Thinking...", "Hi!", "How are you?"), tts.spoken)
 
         assertEquals(2, store.messages.size)
         assertEquals(Role.USER, store.messages[0].role)
@@ -334,6 +335,25 @@ class SessionControllerTest {
     }
 
     @Test
+    fun `thinking announcement is spoken before the reply`() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val tts = FakeTextToSpeech()
+        val chat = FakeChatClient(tokens = listOf("Hello"))
+        val controller = newController(
+            dispatcher, chat, tts = tts,
+            settings = SessionSettings(model = "m", systemPrompt = null, autoListen = false),
+        )
+
+        controller.start(null)
+        advanceUntilIdle()
+        controller.submitText("hi")
+        advanceUntilIdle()
+
+        assertEquals(listOf("Thinking...", "Hello"), tts.spoken)
+        controller.shutdown()
+    }
+
+    @Test
     fun `markdown is stripped for TTS but preserved in history`() = runTest {
         val dispatcher = StandardTestDispatcher(testScheduler)
         val tts = FakeTextToSpeech()
@@ -350,7 +370,7 @@ class SessionControllerTest {
         advanceUntilIdle()
 
         // TTS heard the prose, not the markdown decorators.
-        assertEquals(listOf("Hello!", "See docs."), tts.spoken)
+        assertEquals(listOf("Thinking...", "Hello!", "See docs."), tts.spoken)
 
         // The stored reply keeps the raw markdown for the UI/history.
         val assistant = store.messages.first { it.role == Role.ASSISTANT }

@@ -24,10 +24,16 @@ class SttTurnWindow(
 
     private var lastVoiceAt: Long? = null
 
-    /** True once any voice was detected (RMS above the floor or real transcript). */
+    /** True once any voice was detected (recognized text — see [onVoice]). */
     val hasVoice: Boolean get() = lastVoiceAt != null
 
-    /** Records that voice was heard at [at]; resets the silence window. */
+    /**
+     * Records that voice was heard at [at]; resets the silence window. Callers
+     * must only invoke this for recognized text (a non-blank partial/final
+     * result), never for raw mic amplitude — amplitude alone can't
+     * distinguish speech from ambient noise, so treating it as voice would
+     * let background noise keep the window open indefinitely.
+     */
     fun onVoice(at: Long) {
         lastVoiceAt = at
     }

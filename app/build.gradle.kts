@@ -24,8 +24,8 @@ android {
         applicationId = "com.chirp"
         minSdk = 26
         targetSdk = 35
-        versionCode = 14
-        versionName = "0.8.6"
+        versionCode = 16
+        versionName = "0.8.7"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
@@ -100,9 +100,6 @@ dependencies {
 
     // Encrypted settings
     implementation(libs.androidx.security.crypto)
-
-    // Media / headset buttons
-    implementation(libs.androidx.media)
 
     // Wear OS bridge (Phase 2): Data Layer + WearableListenerService
     implementation(libs.play.services.wearable)
