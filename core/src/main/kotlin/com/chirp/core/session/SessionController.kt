@@ -370,6 +370,7 @@ class SessionController @Inject constructor(
                 errorMessage = null,
             )
         }
+        speakBestEffort(THINKING_ANNOUNCEMENT)
 
         val history = buildHistory(convId, s)
         val spec = ChatRequestSpec(
@@ -641,6 +642,8 @@ class SessionController @Inject constructor(
     // endregion
 
     companion object {
+        private const val THINKING_ANNOUNCEMENT = "Thinking..."
+
         // PHASE 2 — WEAR INTEGRATION POINT:
         // The service collects [state] and publishes it via WearContract.encodeState
         // to the Data Layer; incoming Data Layer messages are decoded with
