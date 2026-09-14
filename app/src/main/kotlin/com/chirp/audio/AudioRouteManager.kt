@@ -1,5 +1,6 @@
 package com.chirp.audio
 
+import android.annotation.SuppressLint
 import android.bluetooth.BluetoothManager
 import android.bluetooth.BluetoothProfile
 import android.content.Context
@@ -99,10 +100,11 @@ class AudioRouteManager @Inject constructor(
         }
     }
 
+    @SuppressLint("MissingPermission")
     fun isBluetoothHeadsetConnected(): Boolean =
         runCatching {
-            bluetoothManager?.getProfileConnectionState(BluetoothProfile.HEADSET) ==
-                BluetoothProfile.STATE_CONNECTED
+            bluetoothManager?.adapter?.getProfileConnectionState(BluetoothProfile.HEADSET) ==
+                android.bluetooth.BluetoothAdapter.STATE_CONNECTED
         }.getOrDefault(false)
 
     private fun requestFocus(): Boolean {

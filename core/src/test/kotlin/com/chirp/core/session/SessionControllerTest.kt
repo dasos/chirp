@@ -310,7 +310,7 @@ class SessionControllerTest {
         val tts = object : FakeTextToSpeech() {
             override suspend fun speak(text: String, utteranceId: String) {
                 super.speak(text, utteranceId)
-                awaitCancellation()
+                if (text != "Thinking...") awaitCancellation()
             }
         }
         val controller = newController(

@@ -408,6 +408,7 @@ class SessionController @Inject constructor(
                     _state.update { it.copy(partialResponse = full.toString()) }
                     sentenceBuffer.append(token).forEach { sentences.send(it) }
                 }
+                ensureSpeakingPhase()
                 sentenceBuffer.flush()?.let { sentences.send(it) }
                 streamCompleted = true
             } catch (c: CancellationException) {
