@@ -488,7 +488,7 @@ class SessionController @Inject constructor(
             return // silently listen again
         }
         noMatchCount = 0
-        speakBestEffort("I didn't catch that. Tap the mic when you're ready.")
+        speakBestEffort("I didn't hear anything. Tap the mic when you are ready.")
         paused = true
     }
 
