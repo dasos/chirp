@@ -2,12 +2,20 @@ package com.chirp.ui.home
 
 import android.text.format.DateUtils
 
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.splineBasedDecay
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.AnchoredDraggableState
+import androidx.compose.foundation.gestures.DraggableAnchors
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.anchoredDraggable
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -26,15 +34,17 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SwipeToDismissBox
-import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.platform.LocalDensity
+import kotlin.math.roundToInt
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -98,41 +108,44 @@ fun HomeScreen(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun ConversationRow(
     conversation: Conversation,
     onClick: () -> Unit,
     onDelete: () -> Unit,
 ) {
-    val dismissState = rememberSwipeToDismissBoxState(
-        confirmValueChange = { value ->
-            if (value != SwipeToDismissBoxValue.Settled) {
-                onDelete()
-                true
-            } else {
-                false
-            }
-        },
-    )
+    val density = LocalDensity.current
+    val deleteWidth = 96.dp
+    val deleteWidthPx = with(density) { deleteWidth.toPx() }
+    val anchors = DraggableAnchors {
+        ConversationDragValue.Closed at 0f
+        ConversationDragValue.Delete at -deleteWidthPx
+    }
+    val dragState = remember {
+        AnchoredDraggableState(
+            initialValue = ConversationDragValue.Closed,
+            anchors = anchors,
+            positionalThreshold = { distance -> distance * 0.5f },
+            velocityThreshold = { with(density) { 125.dp.toPx() } },
+            snapAnimationSpec = tween(),
+            decayAnimationSpec = splineBasedDecay(density),
+        )
+    }
 
-    SwipeToDismissBox(
-        state = dismissState,
-        backgroundContent = {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 24.dp),
-                contentAlignment = Alignment.CenterEnd,
-            ) {
-                Icon(
-                    Icons.Filled.Delete,
-                    contentDescription = "Delete",
-                    tint = MaterialTheme.colorScheme.error,
-                )
-            }
-        },
-    ) {
+    Box(modifier = Modifier.fillMaxWidth()) {
+        IconButton(
+            onClick = onDelete,
+            modifier = Modifier
+                .align(Alignment.CenterEnd)
+                .width(deleteWidth),
+        ) {
+            Icon(
+                Icons.Filled.Delete,
+                contentDescription = "Delete conversation",
+                tint = MaterialTheme.colorScheme.error,
+            )
+        }
         ListItem(
             headlineContent = {
                 Text(
@@ -158,9 +171,20 @@ private fun ConversationRow(
                     )
                 }
             },
-            modifier = Modifier.clickable(onClick = onClick),
+            modifier = Modifier
+                .offset { IntOffset(dragState.requireOffset().roundToInt(), 0) }
+                .anchoredDraggable(
+                    state = dragState,
+                    orientation = Orientation.Horizontal,
+                )
+                .clickable(onClick = onClick),
         )
     }
+}
+
+private enum class ConversationDragValue {
+    Closed,
+    Delete,
 }
 
 @Composable
