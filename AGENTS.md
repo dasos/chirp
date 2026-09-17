@@ -145,7 +145,10 @@ server tool; search runs server-side and never interrupts the token stream.
 - `app/src/androidTest`: `ConversationDaoTest`.
 
 When you change the loop, the sentence buffer, or the parser, update/extend these.
-CI (`.github/workflows/ci.yml`) runs `:core:test` and `assembleDebug` on push/PR.
+CI (`.github/workflows/ci.yml`) runs on **pull requests and `v*` tags** — not on
+pushes to `main`. PRs run `:core:test` + `assembleDebug` as a compile check; a tag
+additionally builds signed, minified **release** APKs, verifies the VAD model and
+ONNX native library survived R8, and publishes them to a GitHub Release.
 
 ## Releases
 
@@ -155,7 +158,19 @@ CI triggers only on `v*` tags. To make a release, tag the **specific commit** yo
 git tag v0.2.0 && git push origin v0.2.0
 ```
 
-This kicks off CI, which builds and auto-creates a GitHub Release with the APK attached + generated release notes. CI enforces that the tag name matches `versionName` in `app/build.gradle.kts` — bump the version before tagging. Do **not** tag for workflow-only changes (e.g. CI config) — those can be committed to `main` without triggering a build.
+This kicks off CI, which builds the **signed release** APKs (phone + wear) and auto-creates a GitHub Release with them attached + generated release notes. CI enforces that the tag name matches `versionName` in `app/build.gradle.kts` — bump the version before tagging. Do **not** tag for workflow-only changes (e.g. CI config) — those can be committed to `main` without triggering a build.
+
+The tag build is the **only** thing that runs R8 over the app, so a release is
+also the first place a missing ProGuard keep rule can surface. CI guards the two
+that would otherwise fail silently on-device — the Silero VAD model asset and the
+ONNX Runtime native library — but a new reflective dependency needs its own rule
+in `app/proguard-rules.pro` (or `wear/proguard-rules.pro`) and its own check here.
+
+Both modules sign with the committed `app/signing/debug.keystore`. That is
+deliberate: distribution is GitHub Releases rather than Play, and the phone and
+watch APKs must share a signer for Wear Data Layer pairing. It does mean the
+signing key is public, so it is not suitable for Play Store distribution — that
+would need a real upload key injected from repository secrets.
 
 ## Commits
 

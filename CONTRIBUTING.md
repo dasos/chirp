@@ -67,7 +67,9 @@ See [AGENTS.md](AGENTS.md) for the architecture invariants and gotchas, and the
 4. Update [README.md](README.md) and [AGENTS.md](AGENTS.md) if behavior or
    architecture changed.
 
-CI (GitHub Actions) runs `:core:test` and `assembleDebug` on every push and PR.
+CI (GitHub Actions) runs on pull requests and on `v*` tags — **not** on pushes to
+`main`. A PR runs `:core:test` and `assembleDebug`; tagging builds the signed
+release APKs and publishes them.
 
 ## Reporting issues
 

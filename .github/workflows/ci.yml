@@ -41,7 +41,7 @@ jobs:
           if-no-files-found: ignore
 
   android-build:
-    name: Assemble debug APK
+    name: Assemble APK (release on tags, debug on PRs)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -68,31 +68,69 @@ jobs:
             echo "::error::Tag ${{ github.ref_name }} does not match versionName $APP_VERSION"
             exit 1
           fi
+      # Pull requests only need a compile check, and the unminified debug build
+      # is much faster than running R8 over both modules.
       - name: Assemble debug APKs
+        if: ${{ !startsWith(github.ref, 'refs/tags/') }}
         run: gradle :app:assembleDebug :wear:assembleDebug --no-daemon --stacktrace
-      - name: Rename debug APKs
+
+      # Tags produce the artifacts people actually install: minified, resource-
+      # shrunk and signed. This is also the only job that exercises R8, so a
+      # missing keep rule fails here rather than at runtime on a device.
+      - name: Assemble release APKs
+        if: startsWith(github.ref, 'refs/tags/')
+        run: gradle :app:assembleRelease :wear:assembleRelease --no-daemon --stacktrace
+
+      - name: Name the APKs after their version
+        if: startsWith(github.ref, 'refs/tags/')
         run: |
           APP_VERSION=$(grep -oP 'versionName = "\K[^" ]+' app/build.gradle.kts)
           WEAR_VERSION=$(grep -oP 'versionName = "\K[^" ]+' wear/build.gradle.kts)
-          cp app/build/outputs/apk/debug/*.apk "app/build/outputs/apk/debug/chirp-v${APP_VERSION}.apk"
-          cp wear/build/outputs/apk/debug/*.apk "wear/build/outputs/apk/debug/chirp-wear-v${WEAR_VERSION}.apk"
-      - name: Upload debug phone APK
+          cp app/build/outputs/apk/release/*.apk "app/build/outputs/apk/release/chirp-v${APP_VERSION}.apk"
+          cp wear/build/outputs/apk/release/*.apk "wear/build/outputs/apk/release/chirp-wear-v${WEAR_VERSION}.apk"
+
+      # R8 and the resource shrinker must never strip what the speech pipeline
+      # needs. A missing model or native library would pass every other check
+      # here and then fail silently on-device the first time someone speaks.
+      - name: Verify the release APK is complete and signed
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          set -euo pipefail
+          APK=$(ls app/build/outputs/apk/release/chirp-v*.apk)
+          echo "Inspecting $APK"
+
+          unzip -l "$APK" | grep -q 'assets/silero_vad.onnx' \
+            || { echo "::error::Silero VAD model missing from the APK — speech-to-text would fail on device"; exit 1; }
+
+          unzip -l "$APK" | grep -q 'lib/arm64-v8a/libonnxruntime.so' \
+            || { echo "::error::ONNX Runtime native library missing from the APK"; exit 1; }
+
+          BUILD_TOOLS=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
+          "$BUILD_TOOLS/apksigner" verify --print-certs "$APK" \
+            || { echo "::error::Release APK is not correctly signed"; exit 1; }
+
+          echo "APK size: $(du -h "$APK" | cut -f1)"
+
+      - name: Upload release phone APK
+        if: startsWith(github.ref, 'refs/tags/')
         uses: actions/upload-artifact@v7
         with:
-          name: chirp-debug-apk
-          path: app/build/outputs/apk/debug/chirp-v*.apk
+          name: chirp-release-apk
+          path: app/build/outputs/apk/release/chirp-v*.apk
           if-no-files-found: error
-      - name: Upload debug wear APK
+      - name: Upload release wear APK
+        if: startsWith(github.ref, 'refs/tags/')
         uses: actions/upload-artifact@v7
         with:
-          name: chirp-wear-debug-apk
-          path: wear/build/outputs/apk/debug/chirp-wear-v*.apk
+          name: chirp-wear-release-apk
+          path: wear/build/outputs/apk/release/chirp-wear-v*.apk
           if-no-files-found: error
+
       - name: Create GitHub Release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v3
         with:
           files: |
-            app/build/outputs/apk/debug/chirp-v*.apk
-            wear/build/outputs/apk/debug/chirp-wear-v*.apk
+            app/build/outputs/apk/release/chirp-v*.apk
+            wear/build/outputs/apk/release/chirp-wear-v*.apk
           generate_release_notes: true

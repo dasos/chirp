@@ -37,6 +37,11 @@ android {
             isMinifyEnabled = false
         }
         release {
+            // Same keystore as debug and as :wear, so an upgrade always sees the
+            // same signer. The keystore is committed deliberately: distribution
+            // is GitHub Releases rather than Play, and both modules must share a
+            // signer for the Wear Data Layer pairing to work.
+            signingConfig = signingConfigs.getByName("ci")
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(
