@@ -101,10 +101,12 @@ class PipelineSpeechToText @Inject constructor(
         val captured = ArrayDeque<ShortArray>()
         var announcedSpeech = false
         var outcome = UtteranceAssembler.Decision.NO_SPEECH
+        var frameCount = 0L
 
         try {
             while (true) {
                 currentCoroutineContext().ensureActive()
+                frameCount++
 
                 val frame = try {
                     mic.readFrame()
@@ -115,9 +117,16 @@ class PipelineSpeechToText @Inject constructor(
                 }
                 if (frame == null) break // mic closed underneath us
 
-                emit(SttEvent.RmsChanged(MicCapture.rmsDb(frame)))
+                val rms = MicCapture.rmsDb(frame)
+                emit(SttEvent.RmsChanged(rms))
 
                 val isSpeech = vad.isSpeech(frame)
+
+                // Throttled diagnostic: raw level + VAD probability at ~3.1 Hz.
+                if (frameCount % LD == 0L || frameCount == 1L) {
+                    Log.d(TAG, "frame=$frameCount rms=$rms vadProbability=$isSpeech")
+                }
+
                 captured.addLast(frame)
 
                 val decision = assembler.onFrame(isSpeech, SystemClock.elapsedRealtime())
@@ -133,6 +142,11 @@ class PipelineSpeechToText @Inject constructor(
 
                 if (decision != UtteranceAssembler.Decision.CONTINUE) {
                     outcome = decision
+                    Log.d(
+                        TAG,
+                        "capture finished: decision=$decision frames=$frameCount " +
+                            "speechMs=${assembler.speechMs} capturedFrames=${captured.size}",
+                    )
                     break
                 }
             }
@@ -186,5 +200,8 @@ class PipelineSpeechToText @Inject constructor(
 
         /** ~320ms of lead-in retained before speech is confirmed. */
         const val PRE_ROLL_FRAMES = 10
+
+        /** Log every Nth frame's raw level (+ VAD verdict) at ~3.1 Hz. */
+        const val LD = 10L
     }
 }

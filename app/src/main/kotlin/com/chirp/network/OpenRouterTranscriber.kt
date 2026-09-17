@@ -58,6 +58,11 @@ class OpenRouterTranscriber @Inject constructor(
 
             val model = settings.sttModel()
             val wav = WavEncoder.encode(clip.samples, clip.sampleRateHz)
+            Log.d(
+                TAG,
+                "uploading transcription: model=$model durationMs=${clip.durationMs} " +
+                    "samples=${clip.samples.size} wavBytes=${wav.size} url=$base/audio/transcriptions",
+            )
 
             val body = MultipartBody.Builder()
                 .setType(MultipartBody.FORM)
@@ -79,6 +84,11 @@ class OpenRouterTranscriber @Inject constructor(
             try {
                 client.newCall(request).execute().use { response ->
                     val payload = response.body?.string().orEmpty()
+                    Log.d(
+                        TAG,
+                        "transcription response: http=${response.code} " +
+                            "body=${payload.take(MAX_LOG_BODY_CHARS)}",
+                    )
                     if (!response.isSuccessful) {
                         throw TranscriptionException(
                             httpError(response.code),
@@ -110,7 +120,11 @@ class OpenRouterTranscriber @Inject constructor(
         root["usage"]?.jsonObject?.get("cost")?.jsonPrimitive?.doubleOrNull?.let {
             Log.d(TAG, "transcription cost: $it")
         }
-        return root["text"]?.jsonPrimitive?.contentOrNull?.trim().orEmpty()
+        val text = root["text"]?.jsonPrimitive?.contentOrNull?.trim().orEmpty()
+        if (text.isBlank()) {
+            Log.w(TAG, "transcription response did not contain non-empty text")
+        }
+        return text
     }
 
     private fun httpError(code: Int): SttError = when {
@@ -125,6 +139,7 @@ class OpenRouterTranscriber @Inject constructor(
         val JSON = Json { ignoreUnknownKeys = true }
 
         const val TAG = "OpenRouterTranscriber"
+        const val MAX_LOG_BODY_CHARS = 1_000
         const val SITE_URL = "https://github.com/dasos/chirp"
         const val SITE_TITLE = "Chirp"
 

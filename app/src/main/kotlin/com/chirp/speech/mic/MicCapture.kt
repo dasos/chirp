@@ -36,6 +36,9 @@ class MicCapture(
     private var aec: AcousticEchoCanceler? = null
     private var ns: NoiseSuppressor? = null
 
+    /** True when effects were attached this turn (only on the comm path). */
+    private var effectsAttached = false
+
     /** Opens the mic. Throws [MicUnavailableException] if it cannot be started. */
     @SuppressLint("MissingPermission") // RECORD_AUDIO is checked before a session starts
     fun start() {
@@ -88,10 +91,14 @@ class MicCapture(
         }
 
         record = created
-        // Attached only once recording is definitely live, so a failed start
-        // cannot leave effect handles behind with nothing to release them.
-        attachEffects(created.audioSessionId)
-        Log.d(TAG, "microphone open: source=$source buffer=$bufferBytes")
+        // Effects only on the communication path: VOICE_RECOGNITION gets its
+        // pre-processing from the HAL and adding an AEC/NS effect on top has
+        // been observed to garble the signal into noise on some devices.
+        if (preferCommunicationSource) {
+            attachEffects(created.audioSessionId)
+            effectsAttached = true
+        }
+        Log.d(TAG, "microphone open: source=$source buffer=$bufferBytes effects=$effectsAttached")
     }
 
     /**
@@ -138,6 +145,7 @@ class MicCapture(
         ns?.let { runCatching { it.release() } }
         aec = null
         ns = null
+        effectsAttached = false
     }
 
     companion object {
