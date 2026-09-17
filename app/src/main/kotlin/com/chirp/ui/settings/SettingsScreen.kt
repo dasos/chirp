@@ -67,6 +67,8 @@ fun SettingsScreen(
     val models by viewModel.models.collectAsStateWithLifecycle()
     val voices by viewModel.voices.collectAsStateWithLifecycle()
     val modelsLoading by viewModel.modelsLoading.collectAsStateWithLifecycle()
+    val sttModels by viewModel.sttModels.collectAsStateWithLifecycle()
+    val sttModelsLoading by viewModel.sttModelsLoading.collectAsStateWithLifecycle()
     val connection by viewModel.connection.collectAsStateWithLifecycle()
 
     Scaffold(
@@ -97,9 +99,12 @@ fun SettingsScreen(
             models = models,
             voices = voices,
             modelsLoading = modelsLoading,
+            sttModels = sttModels,
+            sttModelsLoading = sttModelsLoading,
             connection = connection,
             onUpdate = viewModel::update,
             onLoadModels = viewModel::loadModels,
+            onLoadSttModels = viewModel::loadSttModels,
             onLoadVoices = viewModel::loadVoices,
             onTestConnection = viewModel::testConnection,
         )
@@ -114,9 +119,12 @@ private fun SettingsContent(
     models: List<ChatModel>,
     voices: List<com.chirp.core.speech.TtsVoice>,
     modelsLoading: Boolean,
+    sttModels: List<ChatModel>,
+    sttModelsLoading: Boolean,
     connection: ConnectionUiState,
     onUpdate: ((AppSettings) -> AppSettings) -> Unit,
     onLoadModels: () -> Unit,
+    onLoadSttModels: () -> Unit,
     onLoadVoices: () -> Unit,
     onTestConnection: () -> Unit,
 ) {
@@ -310,6 +318,27 @@ private fun SettingsContent(
             },
         )
 
+        Text(
+            "Transcription model",
+            style = MaterialTheme.typography.bodyLarge,
+            modifier = Modifier.padding(top = 8.dp),
+        )
+        ModelSearchField(
+            selected = sttModels.firstOrNull { it.id == settings.sttModel },
+            models = sttModels,
+            modelsLoading = sttModelsLoading,
+            onLoadModels = onLoadSttModels,
+            onSelect = { onUpdate { s -> s.copy(sttModel = it.id) } },
+            placeholderText = settings.sttModel.ifBlank { "Select a transcription model" },
+        )
+        Text(
+            "Speech is recorded on-device and transcribed by this model, billed to the " +
+                "same account as chat. Larger models are more accurate but add a pause " +
+                "before each reply.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+
         HorizontalDivider()
 
         SectionTitle("Conversation")
@@ -406,6 +435,7 @@ private fun ModelSearchField(
     modelsLoading: Boolean,
     onLoadModels: () -> Unit,
     onSelect: (ChatModel) -> Unit,
+    placeholderText: String? = null,
 ) {
     var active by remember { mutableStateOf(false) }
     var query by remember { mutableStateOf("") }
@@ -439,7 +469,15 @@ private fun ModelSearchField(
                 active = it
                 if (!it) query = ""
             },
-            placeholder = { Text(if (selected == null) "Select a model" else "Search models") },
+            placeholder = {
+                Text(
+                    when {
+                        selected != null -> "Search models"
+                        placeholderText != null -> placeholderText
+                        else -> "Select a model"
+                    },
+                )
+            },
             trailingIcon = {
                 IconButton(onClick = onLoadModels) {
                     if (modelsLoading) {

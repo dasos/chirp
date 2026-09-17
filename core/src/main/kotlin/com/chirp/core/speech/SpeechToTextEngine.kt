@@ -3,9 +3,11 @@ package com.chirp.core.speech
 import kotlinx.coroutines.flow.Flow
 
 /**
- * Abstraction over speech recognition. The Android implementation wraps
- * `android.speech.SpeechRecognizer`; a future implementation could stream audio
- * to a server-side Whisper endpoint without changing any caller.
+ * Abstraction over speech recognition. The shipped implementation owns the
+ * microphone directly (`AudioRecord` + voice-activity detection) and hands the
+ * captured utterance to a [Transcriber]; nothing about that leaks through this
+ * interface, so an on-device or streaming engine can replace it without
+ * changing any caller.
  */
 interface SpeechToTextEngine {
 
@@ -24,9 +26,11 @@ interface SpeechToTextEngine {
 /** Tunables for a listening session. */
 data class SttConfig(
     val languageTag: String? = null,
-    /** Preferred max silence before the recognizer finalizes, in milliseconds. */
+    /**
+     * Silence after the last detected speech before the turn ends, in
+     * milliseconds. Enforced exactly by the capture pipeline.
+     */
     val silenceTimeoutMs: Long = 2_000L,
-    val preferOffline: Boolean = false,
 )
 
 /** Events emitted during a recognition session. */
@@ -43,6 +47,11 @@ sealed interface SttEvent {
     /** Final recognized text; the flow completes after this. */
     data class FinalResult(val text: String) : SttEvent
 
+    /**
+     * Speech has ended and the captured audio is being transcribed. Between
+     * this and [FinalResult] the pipeline is waiting on the transcription
+     * backend, which the UI surfaces so the pause is explained.
+     */
     data object EndOfSpeech : SttEvent
 
     /** Terminal error; the flow completes after this. */

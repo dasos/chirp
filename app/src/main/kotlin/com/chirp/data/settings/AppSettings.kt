@@ -6,6 +6,8 @@ data class AppSettings(
     /** Bearer API key for the chat endpoint. */
     val apiKey: String = "",
     val model: String = "",
+    /** Transcription model used by the speech-to-text pipeline. */
+    val sttModel: String = DEFAULT_STT_MODEL,
     val systemPrompt: String = DEFAULT_SYSTEM_PROMPT,
     val ttsSpeed: Float = 1.0f,
     val ttsVoiceId: String? = null,
@@ -22,6 +24,13 @@ data class AppSettings(
          * gateway, an Ollama reverse proxy, or direct to OpenAI).
          */
         const val DEFAULT_BASE_URL = "https://openrouter.ai/api/v1"
+
+        /**
+         * Speech-to-text model. Served from the same base URL and API key as the
+         * chat calls, so no extra credential is needed. List alternatives with
+         * `GET /models?output_modalities=transcription`.
+         */
+        const val DEFAULT_STT_MODEL = "openai/whisper-1"
 
         /**
          * Default system instruction for new conversations. Emphasizes conciseness

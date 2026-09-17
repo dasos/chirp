@@ -12,6 +12,13 @@ data class SessionState(
     val model: String = "",
     /** Live partial transcript while [SessionPhase.LISTENING]. */
     val partialTranscript: String = "",
+    /**
+     * True while captured speech is being transcribed — after the user stops
+     * talking but before the text is available. The capture pipeline uploads
+     * the utterance at this point, so the UI explains the pause instead of
+     * looking stalled.
+     */
+    val transcribing: Boolean = false,
     /** Assistant text accumulated so far while THINKING/SPEAKING. */
     val partialResponse: String = "",
     /** Microphone amplitude for the listening waveform/pulse. */

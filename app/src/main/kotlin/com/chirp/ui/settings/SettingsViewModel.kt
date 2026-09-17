@@ -10,6 +10,7 @@ import com.chirp.core.speech.TtsVoice
 import com.chirp.data.settings.AppSettings
 import com.chirp.data.settings.SettingsRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -45,11 +46,35 @@ class SettingsViewModel @Inject constructor(
     private val _modelsLoading = MutableStateFlow(false)
     val modelsLoading: StateFlow<Boolean> = _modelsLoading.asStateFlow()
 
+    private val _sttModels = MutableStateFlow<List<ChatModel>>(emptyList())
+    val sttModels: StateFlow<List<ChatModel>> = _sttModels.asStateFlow()
+
+    private val _sttModelsLoading = MutableStateFlow(false)
+    val sttModelsLoading: StateFlow<Boolean> = _sttModelsLoading.asStateFlow()
+
     private val _connection = MutableStateFlow<ConnectionUiState>(ConnectionUiState.Idle)
     val connection: StateFlow<ConnectionUiState> = _connection.asStateFlow()
 
     fun update(transform: (AppSettings) -> AppSettings) {
         viewModelScope.launch { settingsRepository.update(transform) }
+    }
+
+    /** Loads the transcription-capable models for the speech-to-text picker. */
+    fun loadSttModels() {
+        viewModelScope.launch {
+            _sttModelsLoading.value = true
+            try {
+                _sttModels.value = chatClient.listModels(outputModality = "transcription")
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _connection.value = ConnectionUiState.Failure(
+                    e.message ?: "Could not load transcription models",
+                )
+            } finally {
+                _sttModelsLoading.value = false
+            }
+        }
     }
 
     fun loadModels() {

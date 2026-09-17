@@ -9,13 +9,13 @@
 
 A native Android app for **hands-free voice conversations with AI models via [OpenRouter](https://openrouter.ai)** — or any OpenAI-compatible endpoint — designed for use while walking with Bluetooth headphones.
 
-Speak → on-device speech-to-text → stream the reply from the chat backend → speak it back **sentence-by-sentence** as it arrives → automatically listen again. The loop runs in a foreground service so it survives screen-off, and the big push-to-talk button / headset media buttons walk it (talk → hear → talk again).
+Speak → speech-to-text → stream the reply from the chat backend → speak it back **sentence-by-sentence** as it arrives → automatically listen again. The loop runs in a foreground service so it survives screen-off, and the big push-to-talk button walks it (talk → hear → talk again).
 
 - **Kotlin + Jetpack Compose** (Material 3, dynamic color, dark mode)
 - **OpenRouter by default, nothing else required** — the app talks directly to `https://openrouter.ai/api/v1` (`POST /chat/completions`, `GET /models`); any OpenAI-compatible gateway (e.g. a self-hosted LiteLLM box) works via the advanced base-URL setting
 - Optional **server-side web search** (OpenRouter's `openrouter:web_search` tool) so replies can be grounded in current web results
 - Coroutines + Flow, MVVM, Hilt, Room, OkHttp (SSE streaming) + kotlinx.serialization
-- On-device `SpeechRecognizer` (STT) and `TextToSpeech` (TTS), behind clean interfaces so server-side Whisper/Piper can be dropped in later
+- App-owned microphone pipeline for STT (`AudioRecord` + Silero VAD + `/audio/transcriptions`) and on-device `TextToSpeech` (TTS), behind clean interfaces
 - Min SDK 26, target/compile SDK 35
 
 ---
@@ -42,7 +42,7 @@ Speak → on-device speech-to-text → stream the reply from the chat backend �
 
 - 🎙️ **Hands-free loop** — speak, hear the reply, and it listens again automatically; keep your phone in your pocket while walking.
 - ⚡ **Low-latency speech** — the reply is spoken **sentence-by-sentence** as it streams in, instead of waiting for the whole response.
-- 🎧 **Bluetooth-aware** — routes the mic over Bluetooth SCO when a headset is connected, requests audio focus, and maps **headset media buttons** to the push-to-talk primary action (and stop speaking).
+- 🎧 **Bluetooth-aware** — routes the mic over Bluetooth SCO when a headset is connected and requests audio focus, so the headset microphone drives the conversation.
 - 🔔 **Survives screen-off** — a foreground service keeps the session alive, with a persistent notification showing state (Listening / Thinking / Speaking / Ready), the latest partial reply, an elapsed "Thinking…" timer, and Stop (+ Stop speaking) actions.
 - 🔒 **Your key, your rules** — the API key is stored in `EncryptedSharedPreferences`, sent as a bearer token on every request, and plaintext HTTP to non-local hosts is refused.
 - 💾 **History** — conversations and messages persist locally (Room), with auto-generated titles, swipe-to-delete, and tap-to-continue.
@@ -67,7 +67,9 @@ Two Gradle modules keep the portable session logic free of Android so it is unit
   session/    SessionPhase, SessionState, SessionCommand, SessionEvent,
               SessionController  ← the hands-free loop (state machine)
               ConversationStore, SettingsProvider  (interfaces the app implements)
-  speech/     SpeechToTextEngine, TextToSpeechEngine (interfaces), SentenceBuffer
+  speech/     SpeechToTextEngine, TextToSpeechEngine, Transcriber (interfaces),
+              UtteranceAssembler  ← owns "has the user stopped talking?"
+              SentenceBuffer
   chat/       ChatClient (interface), ChatStreamEvent, OpenAI-compatible wire DTOs,
               OpenAiStreamParser
   wear/       WearContract  ← Phase 2 Data Layer paths + (de)serialization
@@ -79,8 +81,10 @@ Two Gradle modules keep the portable session logic free of Android so it is unit
   data/settings/   SettingsRepository            (EncryptedSharedPreferences; implements SettingsProvider)
                    ConnectionConfigHolder        (current base URL + API key, read per request)
   network/         OpenRouterChatClient (implements ChatClient), AuthInterceptor (bearer auth + HTTPS-for-remote)
-  speech/          AndroidSpeechToText, AndroidTextToSpeech
-  audio/           AudioRouteManager (focus + Bluetooth SCO), MediaSessionController (headset buttons)
+                   OpenRouterTranscriber (implements Transcriber), WavEncoder
+  speech/          PipelineSpeechToText (AudioRecord → VAD → Transcriber), AndroidTextToSpeech
+  speech/mic/      MicCapture (AudioRecord), SileroVad (ONNX voice-activity detection)
+  audio/           AudioRouteManager (focus + Bluetooth SCO)
   service/         ConversationService (foreground), ConversationNotification
   ui/              theme, navigation, home, conversation, settings, components, permissions
   di/              Hilt modules (bind :core interfaces → Android impls)
@@ -101,15 +105,16 @@ Every entry point funnels through the **foreground service** as an action intent
 ```
 UI (ConversationViewModel)  ─┐
 Notification buttons         ├─►  ConversationService (action intents)  ─►  SessionController
-Headset media buttons        │         (audio focus + SCO + notification)
-(Phase 2) Wear Data Layer  ──┘
+(Phase 2) Wear Data Layer  ──┘         (audio focus + SCO + notification)
 ```
 
-The `ConversationService` adds the Android concerns the pure controller shouldn't know about: audio focus, Bluetooth SCO routing (`AudioRouteManager`), headset media buttons (`MediaSessionController`), and the persistent notification.
+The `ConversationService` adds the Android concerns the pure controller shouldn't know about: audio focus, Bluetooth SCO routing (`AudioRouteManager`), and the persistent notification.
 
 ### Networking
 
 `OpenRouterChatClient` posts to `{base}/chat/completions` with `stream: true` and reads the SSE response **line-by-line** via OkHttp + Okio, mapping each `data:` line with the pure `OpenAiStreamParser`. When web search is enabled it adds `tools: [{"type": "openrouter:web_search"}]`, letting OpenRouter ground the reply server-side. `AuthInterceptor` attaches `Authorization: Bearer …` to **every** request when a key is configured, and refuses plaintext HTTP to non-local hosts.
+
+`OpenRouterTranscriber` uploads each captured utterance as multipart WAV to `{base}/audio/transcriptions`, reusing the same base URL, key and OkHttp client — OpenRouter serves speech-to-text from the same account, so there is no second credential. The transcription model is chosen in Settings, from `GET /models?output_modalities=transcription`.
 
 ---
 
@@ -128,7 +133,7 @@ gradle wrapper            # one-time, if you don't already have ./gradlew + the 
 ./gradlew installDebug    # build + install on a connected device/emulator
 
 # Tests:
-./gradlew :core:test                 # JVM unit tests (sentence buffer, parser, controller)
+./gradlew :core:test                 # JVM unit tests (sentence buffer, parser, controller, utterance assembler)
 ./gradlew :app:connectedAndroidTest  # Room DAO instrumentation test (needs a device/emulator)
 ```
 
@@ -139,6 +144,7 @@ First launch:
 1. Open **Settings** (gear icon).
 2. Paste your **API key** (create one at [openrouter.ai/keys](https://openrouter.ai/keys)).
 3. Tap **Test connection**, then pick a **Model** (the list is fetched from `GET /models`). Toggle **Web search** if you want grounded replies.
+   Optionally set a **Transcription model** under *Speech* — it defaults to `openai/whisper-1`.
 4. Go back, tap **New conversation**, then tap the mic and start talking.
 
 ---
@@ -177,7 +183,7 @@ All settings persist in `EncryptedSharedPreferences` (so the API key is encrypte
 
 Requested at runtime, when first needed:
 
-- `RECORD_AUDIO` — required for speech recognition (requested before the first listen).
+- `RECORD_AUDIO` — required to record the microphone for speech-to-text (requested before the first listen).
 - `POST_NOTIFICATIONS` — for the ongoing session notification (requested at startup, Android 13+).
 - `BLUETOOTH_CONNECT` — requested alongside the mic (Android 12+) for SCO routing.
 
@@ -205,7 +211,7 @@ Declared (no runtime prompt): `INTERNET`, `ACCESS_NETWORK_STATE`, `MODIFY_AUDIO_
 The watch is intended as a thin remote: render `SessionState`, send `SessionCommand`s. The pieces are already in place:
 
 - `:core/wear/WearContract.kt` defines the **Data Layer** paths (`/chirp/state`, `/chirp/command`), the capability name, and (de)serialization of state/commands. Both the phone and a future `:wear` module depend on `:core`, so they share this vocabulary.
-- Session control already funnels through `ConversationService` action intents — the watch path is just "Data Layer message → decode with `WearContract` → start the service with the matching action." The hook points are marked with `PHASE 2` comments in `WearContract`, `SessionController`, and `MediaSessionController`.
+- Session control already funnels through `ConversationService` action intents — the watch path is just "Data Layer message → decode with `WearContract` → start the service with the matching action." The hook points are marked with `PHASE 2` comments in `WearContract` and `SessionController`.
 
 To add it later: create a `:wear` module (uncomment the include in `settings.gradle.kts`), depend on `:core`, add a `WearableListenerService` on the phone that publishes `SessionController.state` to `/chirp/state` and forwards `/chirp/command` messages into the service, and a Wear Compose UI that mirrors `SessionState` and sends commands.
 
@@ -214,7 +220,7 @@ To add it later: create a `:wear` module (uncomment the include in `settings.gra
 ## Known limitations
 
 - **Bluetooth audio uses SCO for the whole session** (not A2DP). SCO is mono/narrowband, so TTS quality over Bluetooth is "phone-call" grade rather than music-grade. This is the trade-off for using the headset microphone hands-free; per-turn SCO toggling would improve playback quality at the cost of ~1–2s of latency each turn. TTS routing falls back to loud media output when no SCO headset is present.
-- **On-device STT** (`SpeechRecognizer`) quality and offline availability vary by device/OEM; some recognizers require network. The `SpeechToTextEngine` interface exists so a server-side Whisper engine can replace it.
+- **Speech-to-text needs network.** Chirp records the mic itself and sends each utterance to the configured `/audio/transcriptions` endpoint, so STT does not work offline. This replaced the platform `SpeechRecognizer`, which played an unsuppressable beep on every listening session and would not honour the configured silence window — see `docs/speech-recognizer-beep-investigation.md`. Transcription adds a short pause after you stop speaking, and is billed per second on the same account as chat. The `Transcriber` interface exists so an on-device model can replace it.
 - **Mid-stream network drops are not resumed**: retries with backoff happen only before any tokens arrive (the chat APIs can't resume a partial generation, and re-requesting would duplicate already-spoken text). After tokens start, a drop ends the turn with a spoken "Connection lost" and keeps whatever was received.
 - **Web search is server-side** and billed per search by OpenRouter; generic OpenAI-compatible gateways may not support the `openrouter:web_search` tool, so disable the toggle when pointing at one.
 - **Sentence splitting is heuristic.** It handles decimals, common abbreviations, initials and dotted acronyms, but unusual punctuation may split imperfectly; a long unpunctuated stream is flushed at word boundaries so speech never stalls.

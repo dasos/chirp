@@ -34,7 +34,7 @@ open class FakeChatClient(
         emit(ChatStreamEvent.Completed(null))
     }
 
-    override suspend fun listModels(): List<ChatModel> = models
+    override suspend fun listModels(outputModality: String?): List<ChatModel> = models
     override suspend fun generateTitle(messages: List<Message>, model: String): String? {
         titleRequests++
         return title

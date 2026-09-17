@@ -100,7 +100,7 @@ fun MicStatusIndicator(
         label = "pulse",
     )
 
-    // Map the recognizer RMS (roughly -2..10 dB) to a gentle extra scale.
+    // Map the capture RMS (roughly -2..10 dB) to a gentle extra scale.
     val rmsScale = 1f + (rms.coerceIn(0f, 10f) / 10f) * 0.35f
     val ringScale = when (phase) {
         SessionPhase.LISTENING -> max(pulse, rmsScale)

@@ -14,6 +14,7 @@
 
     <string name="notification_transcript_quoted">“%1$s”</string>
     <string name="notification_listening_content">Listening…</string>
+    <string name="notification_transcribing_content">Transcribing…</string>
     <string name="notification_thinking_content">Waiting for the model…</string>
     <string name="notification_speaking_content">Speaking…</string>
     <string name="notification_paused_content">Tap the mic to continue.</string>

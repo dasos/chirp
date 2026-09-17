@@ -108,6 +108,9 @@ dependencies {
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.okhttp)
 
+    // Voice activity detection for the app-owned microphone pipeline
+    implementation(libs.onnxruntime.android)
+
     // Unit tests
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)

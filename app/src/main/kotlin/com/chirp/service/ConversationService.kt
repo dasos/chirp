@@ -36,7 +36,7 @@ import javax.inject.Inject
  * - While the session is live (LISTENING/THINKING/SPEAKING/PAUSED) an ongoing
  *   foreground card tracks the state; it is removed when the session stops..
  * - Listening is capped: [LISTENING_SILENCE_TIMEOUT_MS] after entering LISTENING
- *   is a fixed last-resort ceiling (AndroidSpeechToText/SttTurnWindow's own
+ *   is a fixed last-resort ceiling (PipelineSpeechToText/UtteranceAssembler's own
  *   silence enforcement is the primary cap and normally fires first); parking
  *   from an active phase (or focus/headset hold) tears the
  *   FGS down and hands over to the "Continue conversation?" standby prompt,
@@ -154,7 +154,7 @@ class ConversationService : LifecycleService() {
                     return@collect
                 }
 
-                // Parked from an active turn ((30 s capped listening,, focus loss,, headset
+                // Parked from an active turn ((capped listening,, focus loss,, headset
                 // hold:): the mic is off and the foreground session hands over to the
                 // "Continue conversation?" standby prompt..
                 val parkedFromActive = state.phase == SessionPhase.PAUSED &&
@@ -200,7 +200,7 @@ class ConversationService : LifecycleService() {
 
                 // Cap each listening window: park after a fixed ceiling so the mic
                 // never stays hot forever. This is the last-resort backstop —
-                // AndroidSpeechToText/SttTurnWindow's own silence enforcement
+                // PipelineSpeechToText/UtteranceAssembler's own silence enforcement
                 // (driven by the "Listening silence timeout" setting) is the
                 // primary mechanism and normally ends listening well before this
                 // fires. Anchored to *entering* LISTENING, not to
@@ -214,7 +214,11 @@ class ConversationService : LifecycleService() {
 
                     silentListenJob = lifecycleScope.launch {
                         delay(LISTENING_SILENCE_TIMEOUT_MS)
-                        if (started && controller.state.value.phase == SessionPhase.LISTENING) {
+                        // Never park while a captured utterance is still being
+                        // transcribed: the mic is already closed and the user is
+                        // waiting on the network, not sitting in silence.
+                        val current = controller.state.value
+                        if (started && current.phase == SessionPhase.LISTENING && !current.transcribing) {
 
 
 
@@ -384,7 +388,13 @@ class ConversationService : LifecycleService() {
 
         private const val NOTIFICATION_ID = 1001
         private const val NOTIFY_THROTTLE_MS = 300L
-        private const val LISTENING_SILENCE_TIMEOUT_MS = 30_000L
+        /**
+         * Last-resort listening ceiling. Sits above
+         * `UtteranceAssembler.DEFAULT_MAX_UTTERANCE_MS` (60s) plus transcription
+         * time, so it only ever fires when the capture pipeline has failed —
+         * never on someone simply talking for a long time.
+         */
+        private const val LISTENING_SILENCE_TIMEOUT_MS = 90_000L
         private const val STANDBY_TIMEOUT_MS = 5 * 60_000L
         private const val STANDBY_TIMEOUT_REQUEST_CODE = 13
 

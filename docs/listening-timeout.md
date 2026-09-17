@@ -1,94 +1,102 @@
 # Chirp — Listening Timeout Design
 
-How Chirp decides "the user has stopped talking, give up and park the mic."
+How Chirp decides "the user has stopped talking, transcribe what they said."
 This lives in its own doc because it's a speech-recognition design question
 (what counts as silence, and why), not a notification/session-state one — see
 [`notification-lifecycle.md`](notification-lifecycle.md) for how a listening
 window's end is *surfaced* (the standby prompt, the FGS teardown, etc.).
 
-## Why the app enforces this itself
+## Why the app owns the microphone
 
-Android's `SpeechRecognizer` accepts advisory silence-timeout extras
-(`EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS` /
-`..._POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS`, still set in
-`AndroidSpeechToText.buildIntent()` from the user's "Listening silence
-timeout" setting, for whatever devices do honor them). These are **advisory
-only** — Google's recognizer is well known to frequently ignore them, and it
-also finalizes a *session* at its own internal endpoint even mid-turn. Relying
-on the platform alone produced two symptoms at different points in this app's
-history:
+Chirp does not use `android.speech.SpeechRecognizer`. It records the mic itself.
 
-- The recognizer cutting listening off *before* the user finished talking,
-  regardless of the configured slider value.
-- Listening running well past the configured timeout when recognition
-  sessions kept getting silently retried/restarted without a reliable ceiling.
+The platform recognizer accepted silence-timeout extras
+(`EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS` and friends) but treated
+them as **advisory**, frequently ignoring them and finalizing a session at its
+own internal endpoint mid-turn. Two symptoms followed at different points in
+this app's history:
 
-The fix for both is the same principle: don't trust the OS to enforce the
-timeout — the app enforces it directly, using the on-device recognizer purely
-as an event source (transcript + errors), never as the authority on timing.
+- listening cut off *before* the user finished talking, regardless of the
+  configured slider value;
+- listening running well past the configured timeout when sessions were
+  silently restarted without a reliable ceiling.
+
+The app worked around this by restarting the recognizer within a turn and
+stitching the segments together. That worked, but every restart triggered the
+recognition service's unsuppressable earcon, so a single turn beeped repeatedly
+— see [`speech-recognizer-beep-investigation.md`](speech-recognizer-beep-investigation.md).
+
+Owning the microphone resolves both problems at once, and the timeout is now
+enforced exactly rather than approximated.
 
 ## Two layers
 
-1. **Primary — `SttTurnWindow` (`:core/speech`) + `AndroidSpeechToText`
-   (`:app`)**. `AndroidSpeechToText.listen()` no longer maps 1:1 to a single
-   recognizer session: it owns a whole "turn" that may span several
-   sessions. `SttTurnWindow` tracks wall-clock time since the last detected
-   voice; whenever a recognizer session ends early (`NO_MATCH` /
-   `SPEECH_TIMEOUT` / an `onResults` that arrives before the window expires),
-   `AndroidSpeechToText` silently restarts a fresh session and stitches its
-   finalized segment onto the running transcript (`SttTurnWindow.accumulated`).
-   A background watchdog coroutine also polls `SttTurnWindow.expired()` every
-   200ms and force-stops the in-flight session once the deadline passes, so
-   the turn ends on schedule even if the recognizer never calls back at all.
-   The turn only emits `SttEvent.FinalResult` (the stitched transcript) or
-   `Error(NO_MATCH)` once `SttTurnWindow.expired()` is true — see
-   `SttTurnWindowTest` for the deadline/reset semantics in isolation.
+1. **Primary — `UtteranceAssembler` (`:core/speech`) + `PipelineSpeechToText`
+   (`:app`).** `MicCapture` delivers fixed 512-sample frames (32ms at 16kHz);
+   `SileroVad` classifies each as speech or not; `UtteranceAssembler` turns that
+   stream of verdicts into a decision. The turn ends exactly
+   `silenceTimeoutMs` after the last speech frame — no polling, no restarts, no
+   stitching. `UtteranceAssembler` also:
+   - keeps a short **pre-roll** of frames from before speech was confirmed, so
+     the leading syllable is not clipped by the VAD's reaction time;
+   - ignores utterances below a **minimum speech duration** (250ms), so a cough
+     or a car door is not a turn;
+   - caps an utterance at **60s**, deliberately under layer 2's ceiling so
+     capture always ends on its own terms.
+
+   See `UtteranceAssemblerTest` for the deadline, pre-roll and rejection
+   semantics in isolation.
 
 2. **Last resort — `ConversationService`'s `LISTENING_SILENCE_TIMEOUT_MS`**
-   (30s, `:app`). A fixed ceiling anchored to *entering* the `LISTENING`
-   phase — not resettable by anything, including recognized speech. It exists
-   purely in case the primary layer doesn't fire (e.g. a bug or platform
-   quirk that keeps `AndroidSpeechToText`'s flow alive with no event at all).
-   It deliberately does **not** share the primary layer's per-utterance
-   resets — see "known limitation" below for why a resettable last-resort
-   timer would defeat the point of having one.
+   (90s, `:app`). A fixed ceiling anchored to *entering* the `LISTENING` phase —
+   not resettable by anything, including detected speech. It exists purely in
+   case the primary layer doesn't fire. It deliberately does **not** share the
+   primary layer's per-utterance resets; a resettable last-resort timer would
+   defeat the point of having one. It does not fire while
+   `SessionState.transcribing` is true, because at that point the mic is already
+   closed and the user is waiting on the network rather than sitting in silence.
 
 ## What "silence"/"voice" actually means
 
-Silence = **no non-blank recognized text** (partial or final) for
-`silenceTimeoutMs`. `SttTurnWindow.onVoice()` is called only from
-`onPartialResults` and `onResults` in `AndroidSpeechToText` — i.e. only when
-the recognizer itself believes it heard *words*, right or wrong.
+Silence = **no VAD-detected speech** for `silenceTimeoutMs`.
 
-`SttEvent.RmsChanged` (raw microphone amplitude) is deliberately **excluded**
-from voice detection. An earlier version of this code reset the window on any
-RMS reading above a fixed dB floor — that's a bug, not a feature: loud wind or
-traffic has a high RMS and is not speech, and quiet, close-mic'd speech can
-have a low one. Amplitude alone can't distinguish the two, so `onRmsChanged`
-only forwards the event for UI purposes (waveform/pulse) and never touches the
-window.
+Raw microphone amplitude is deliberately **excluded** from that decision. An
+early version of this code reset the window on any RMS reading above a fixed dB
+floor — a bug, not a feature: loud wind or traffic has a high RMS and is not
+speech, and quiet, close-mic'd speech can have a low one. Amplitude alone cannot
+distinguish the two.
+
+This constraint outlived the recognizer. `MicCapture.rmsDb()` exists only to
+drive the UI's mic pulse, and must never feed `UtteranceAssembler`. Speech
+detection is Silero VAD's job, and only its verdict counts.
 
 ## Known limitation (accepted tradeoff)
 
-Android's partial-result callback carries no reliable per-word confidence
-score (confidence is only ever exposed on *final* results, inconsistently
-across devices/vendors), so the app has no way to tell "the recognizer heard
-you" apart from "the recognizer misheard background noise as a word." If an
-environment is noisy enough that the on-device ASR itself hallucinates
-partial hypotheses from non-speech audio, those hallucinated partials still
-count as voice and extend the window — a real, understood tradeoff rather
-than an accidental one.
+A neural VAD is far better than an amplitude gate at rejecting wind and traffic,
+but it is not perfect: sufficiently speech-like background noise (a nearby
+conversation, a radio, a podcast in the next room) will be classified as speech
+and extend the window. This is a real, understood tradeoff.
 
-This is why layer 2 exists and must stay non-resettable: it's the guarantee
-that listening ends within 30s no matter how confused the recognizer gets.
+It is also why layer 2 exists and must stay non-resettable: it guarantees that
+listening ends within 90s no matter how confused the VAD gets.
+
+The two numbers are deliberately spaced: 60s of capture plus transcription time
+fits inside the 90s ceiling, so the ceiling only ever fires when the pipeline
+has actually failed — never on someone simply talking for a long time. Raising
+the utterance cap means raising the ceiling with it.
+
+Thresholds are in `SileroVad` — separate enter (0.5) and exit (0.35) scores, so
+a probability hovering at the boundary does not chatter between speech and
+silence mid-word. Tuning these is the main lever if detection misbehaves in a
+particular environment.
 
 ## Where it's configured
 
 Settings → Conversation → **"Listening silence timeout"** slider (1-5s) —
 `AppSettings.listeningTimeoutMs` → `SessionSettings.listeningTimeoutMs` →
-`SttConfig.silenceTimeoutMs`. This single value now drives both the
-(still-sent, still-advisory) OS extras *and* `SttTurnWindow`'s enforced
-deadline in layer 1. There is no separate setting for the layer-2 last-resort
-ceiling; it is a fixed 30s (`ConversationService.LISTENING_SILENCE_TIMEOUT_MS`)
-by design — it is not meant to be tuned by the user, only to guarantee an
-eventual stop.
+`SttConfig.silenceTimeoutMs` → `UtteranceAssembler.silenceTimeoutMs`. Unlike the
+recognizer era, this value is now honoured exactly.
+
+There is no separate setting for the layer-2 ceiling; it is a fixed 90s
+(`ConversationService.LISTENING_SILENCE_TIMEOUT_MS`) by design — not meant to be
+tuned, only to guarantee an eventual stop.

@@ -293,7 +293,13 @@ class SessionController @Inject constructor(
         consumeInjectedText()?.let { return it }
 
         _state.update {
-            it.copy(phase = SessionPhase.LISTENING, partialTranscript = "", partialResponse = "", errorMessage = null)
+            it.copy(
+                phase = SessionPhase.LISTENING,
+                partialTranscript = "",
+                partialResponse = "",
+                transcribing = false,
+                errorMessage = null,
+            )
         }
         _events.tryEmit(SessionEvent.ListeningStarted)
 
@@ -310,9 +316,11 @@ class SessionController @Inject constructor(
                         is SttEvent.RmsChanged -> _state.update { it.copy(rms = event.rms) }
                         is SttEvent.FinalResult -> finalText = event.text
                         is SttEvent.Error -> error = event.type
+                        // Speech is over and transcription is in flight: show it,
+                        // because the user is now waiting on a network round-trip.
+                        SttEvent.EndOfSpeech -> _state.update { it.copy(transcribing = true, rms = 0f) }
                         SttEvent.ReadyForSpeech,
-                        SttEvent.BeginningOfSpeech,
-                        SttEvent.EndOfSpeech -> Unit
+                        SttEvent.BeginningOfSpeech -> Unit
                     }
                 }
             } catch (c: CancellationException) {
@@ -323,6 +331,7 @@ class SessionController @Inject constructor(
 
             if (error == SttError.AUDIO && remainingRetries > 0) {
                 remainingRetries--
+                _state.update { it.copy(transcribing = false) }
                 delay(1_000L)
                 continue
             }
@@ -330,7 +339,7 @@ class SessionController @Inject constructor(
         }
 
         _events.tryEmit(SessionEvent.ListeningStopped)
-        _state.update { it.copy(rms = 0f) }
+        _state.update { it.copy(rms = 0f, transcribing = false) }
 
         return when {
             error == SttError.NO_MATCH || error == SttError.SPEECH_TIMEOUT -> {

@@ -23,3 +23,7 @@
 -dontwarn com.google.errorprone.annotations.CheckReturnValue
 -dontwarn com.google.errorprone.annotations.Immutable
 -dontwarn com.google.errorprone.annotations.RestrictedApi
+
+# ONNX Runtime (Silero VAD) is JNI-backed and loaded reflectively.
+-keep class ai.onnxruntime.** { *; }
+-dontwarn ai.onnxruntime.**

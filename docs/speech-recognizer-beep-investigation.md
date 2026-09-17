@@ -1,86 +1,116 @@
-# Speech Recognizer End-of-Listening Beep Investigation
+# The recognizer beep, and why Chirp owns the microphone
 
-## Summary
+**Status: resolved.** Chirp no longer uses `android.speech.SpeechRecognizer`.
+This document records what the beep was, why no configuration could remove it,
+and what replaced it.
 
-Chirp does not generate a listening-end beep itself. The likely source is the Android speech-recognition service, commonly the Google or OEM recognizer, when it ends or restarts a recognition session. Android exposes no supported public setting for disabling that cue.
+## The symptom
 
-This is separate from TTS. Android `TextToSpeech.speak()` does not automatically insert a start or end beep, and Chirp does not call `playEarcon()` or add an earcon.
+Several beeps during a single listening turn, on a Samsung device, **both over
+Bluetooth and on the loudspeaker**. Playing on the loudspeaker rules out a
+Bluetooth SCO link tone, which is the other plausible source.
 
-## Chirp's recognition flow
+## What the beep actually was
 
-`app/src/main/kotlin/com/chirp/speech/AndroidSpeechToText.kt` uses `SpeechRecognizer`:
+Chirp never played it. There is no `playEarcon`, `addEarcon`, `ToneGenerator`,
+`SoundPool`, `MediaPlayer` or `res/raw/` sound anywhere in the app.
 
-1. A recognizer is created and started at lines 206–210.
-2. The recognizer may end a session at its own internal endpoint, regardless of the requested silence timeout.
-3. `onResults()` stores the recognized segment and calls `restart()` if the app-owned turn window has not expired, at lines 191–200.
-4. Normal endpoint errors (`ERROR_NO_MATCH` and `ERROR_SPEECH_TIMEOUT`) also call `restart()`, at lines 156–169.
-5. `restart()` calls `startListening()` again, at lines 98–103.
-6. `onEndOfSpeech()` only forwards an event at lines 152–154; it does not play audio.
-7. Once the app-owned silence window expires, the watchdog calls `stopListening()` at lines 121–126.
+The cue came from the recognition service. Logcat on current devices shows it
+plainly:
 
-The repeated recognition sessions are intentional: Android's recognizer ends too quickly, so Chirp stitches multiple finalized segments into one turn. This creates multiple opportunities for a recognizer-provided end/start cue.
+```
+I/AudioPlayer: Playing beep com.google.android.tts:raw/open (size 8626 bytes)
+```
 
-## Relevant Android behavior
+It is an 8,626-byte raw resource named `open`, inside **`com.google.android.tts`**
+("Speech Recognition & Synthesis"), played by that app's own audio player the
+moment `startListening()` is called — before `onReadyForSpeech`.
 
-The public `SpeechRecognizer` API documents recognition callbacks and endpoint timing, but does not provide a mute-beep or suppress-sound option. The recognition intent's silence timing extras are advisory and do not control audio cues:
+That location is the whole problem. `com.google.android.tts` is a
+**Play-updatable app, not part of the platform**. AOSP's `SpeechRecognizer.java`
+and `RecognizerIntent.java` contain nothing sound-related at all, so there is no
+API to call, no permission to hold, and no Android version to wait for. Google
+can also change the behaviour on any device at any time, independently of the OS
+version — which is why every workaround in circulation is fragile.
 
-- `EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS`
-- `EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS`
-- `EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS`
+## Why Chirp heard it several times per turn
 
-AOSP's `SpeechRecognizer` source describes `startListening()` and `stopListening()`, but contains no public endpoint-sound suppression parameter. The actual audio behavior belongs to the selected recognition service, which may vary by Android version, device manufacturer, recognizer engine, audio route, and Bluetooth state.
+The system recognizer finalized sessions at its own internal silence threshold
+and largely ignored the `EXTRA_SPEECH_INPUT_*` extras, so the configured
+"Listening silence timeout" could not be honoured directly. The old
+implementation compensated by restarting the recognizer within a single turn and
+stitching the finalized segments together.
 
-References:
+Every restart was a fresh `startListening()`, and therefore a fresh earcon. The
+mechanism that made the timeout setting work was the same mechanism that
+multiplied the beeps.
 
-- https://android.googlesource.com/platform/frameworks/base/+/refs/heads/master/core/java/android/speech/SpeechRecognizer.java
-- https://developer.android.com/reference/android/speech/SpeechRecognizer
-- https://developer.android.com/reference/android/content/Intent#EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS
+## Approaches that do not work
 
-## TTS distinction
+- **No intent extra disables it.** Every `EXTRA_*` constant in `RecognizerIntent`
+  was enumerated; none relate to sound. Widely-copied constants
+  `android.speech.extra.DICTATE_BEEP` and `BEEP_SOUND` do not exist in AOSP — a
+  GitHub-wide search for `DICTATE_BEEP` returns a single hit, in an unverified
+  machine-authored PR whose own test checklist is unticked. `DICTATION_MODE` is
+  real folklore but concerns listening duration, not audio.
+- **`createOnDeviceSpeechRecognizer()` (API 31+) does not help.** Device logs
+  show Google's on-device SODA engine initialising *and* the beep playing in the
+  same window; the earcon comes from the hosting app either way.
+- **Stream-volume muting is unreliable and hazardous.** The beep has moved
+  between `STREAM_MUSIC`, `STREAM_SYSTEM`, `STREAM_NOTIFICATION` and
+  `STREAM_RING` across versions and OEMs. Reports indicate a ~300ms pre-delay is
+  needed before it takes effect, and the streams it currently uses are exactly
+  the ones whose adjustment throws `SecurityException` without Do Not Disturb
+  access. It also risks muting the user's music.
+- **Audio focus does not suppress it.** `AUDIOFOCUS_GAIN_TRANSIENT_EXCLUSIVE`
+  governs *other* apps, not the recognition service's own playback. The
+  recognizer additionally grabs focus itself.
 
-The TTS implementation is `app/src/main/kotlin/com/chirp/speech/AndroidTextToSpeech.kt`:
+`EXTRA_SEGMENTED_SESSION` (API 33+) would have reduced the count to one earcon
+per turn by keeping a single session open across pauses. It was rejected: it
+does not reach silence, and it is unavailable below API 33 (Chirp's `minSdk` is
+26).
 
-- It calls `TextToSpeech.speak()` at lines 91–110.
-- It configures audio routing with `setAudioAttributes()` at lines 68–77 and 154–174.
-- It does not call `playEarcon()`, `addEarcon()`, `playSilence()`, or any sound playback API.
-- The controller does explicitly speak `"Thinking..."` before a response at `core/src/main/kotlin/com/chirp/core/session/SessionController.kt:373`, but that is speech, not a beep.
+## What replaced it
 
-## What can be done
+`app/speech/PipelineSpeechToText` — `AudioRecord` → Silero VAD → `Transcriber`.
 
-### Low-risk investigation
+- **`app/speech/mic/MicCapture`** opens the mic at 16kHz mono PCM16. Opening
+  `AudioRecord` plays no sound.
+- **`app/speech/mic/SileroVad`** classifies each 512-sample frame as speech or
+  not, via ONNX Runtime. A neural VAD rather than an amplitude gate is essential:
+  amplitude cannot distinguish a voice from wind or traffic, which is why the
+  previous implementation deliberately refused to treat `onRmsChanged` as voice.
+  RMS is still reported for the mic pulse, but never feeds the silence decision.
+- **`core/speech/UtteranceAssembler`** owns the end-of-turn decision, and ends
+  the turn exactly `silenceTimeoutMs` after the last speech frame. It keeps a
+  short pre-roll so the leading syllable is not clipped, ignores bursts below a
+  minimum speech duration, and caps an utterance at 60s.
+- **`network/OpenRouterTranscriber`** uploads the clip as multipart WAV to
+  `{baseUrl}/audio/transcriptions`, reusing the same base URL, bearer key and
+  OkHttp client as the chat calls.
 
-Add temporary timestamped diagnostics around:
+Two problems, one fix: the beep is gone because nothing in this path plays a
+sound, and the silence timeout is now exact rather than approximated.
 
-- `onEndOfSpeech()`
-- `onResults()`
-- `onError()`
-- `restart()` and its `startListening()` call
-- the watchdog's `stopListening()` call
+## What it cost
 
-Then test whether the beep occurs immediately after `onResults()`, after `onError()`, after `stopListening()`, or only when a new `startListening()` begins. This identifies whether the device treats it as an end cue, a restart cue, or both.
+- **STT requires network.** There is no offline fallback.
+- **Latency moved.** Transcription happens after speech ends rather than
+  arriving as the user talks. `SttEvent.EndOfSpeech` marks the upload so the UI
+  can show "Transcribing…" instead of looking stalled.
+- **No live partial transcripts.** A batch transcriber cannot produce them. The
+  `Transcriber` seam leaves room for a streaming engine, or for a small local
+  model driving throwaway partials alongside an accurate final transcript.
+- **Accuracy and cost are now ours.** The transcription model is configurable in
+  Settings; the response reports per-request cost.
 
-### Low-risk product changes
+## Verifying the beep is gone
 
-Keep the stitching logic, but reduce unnecessary restarts where possible. For example, investigate whether a recognized result can remain in the current session until the turn window expires on the affected device. This may reduce beeps, but could reduce responsiveness or lose audio because the platform recognizer has already ended its session.
+```bash
+adb logcat -c && adb logcat | grep -i "playing beep"
+```
 
-A different recognition engine or on-device recognizer may have different sound behavior. `SpeechRecognizer.createOnDeviceSpeechRecognizer()` is available only on supported devices and still does not guarantee silent endpointing.
-
-### Fragile workaround
-
-Some Android implementations have historically played recognition cues on the media stream. A workaround can temporarily lower or mute that stream around recognizer transitions, or mask the cue with silence. This is not a supported API and can:
-
-- mute the user's music or other media;
-- interact badly with Bluetooth SCO and Chirp's audio routing;
-- behave differently across Android versions and OEMs;
-- race with the recognizer's cue timing;
-- be unacceptable for accessibility or notification audio.
-
-It should only be an opt-in, device-tested fallback if the diagnostic confirms the cue and the user considers it disruptive enough.
-
-### Deterministic long-term option
-
-Own the microphone pipeline with `AudioRecord` plus voice activity detection, then send controlled audio windows to an ASR engine such as on-device Whisper or a server endpoint. This removes dependence on `SpeechRecognizer` endpoint sounds and timing, but is a substantial architectural change: it adds model/runtime cost, battery use, audio buffering, and loses some of the current platform recognizer behavior.
-
-## Recommended conclusion
-
-There is no reliable configuration switch to turn off the listening-end beep while retaining Android's current `SpeechRecognizer` implementation. First confirm the exact callback boundary on the target device. If confirmed as a recognizer cue, preserve the current stitching behavior and avoid a global audio mute; consider an opt-in, narrowly scoped workaround only after testing Bluetooth and media playback.
+Run a full conversation turn. Expect no output. Running this against a build
+that still used `SpeechRecognizer` shows one line per recognizer restart, which
+is what confirmed the diagnosis.

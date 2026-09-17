@@ -87,6 +87,13 @@ class SettingsRepository @Inject constructor(
         )
     }
 
+    /**
+     * Transcription model for the speech-to-text pipeline. Read directly rather
+     * than through [current] because it is consumed by the network layer, not
+     * the session loop.
+     */
+    fun sttModel(): String = read().sttModel.ifBlank { AppSettings.DEFAULT_STT_MODEL }
+
     fun connectionConfig(): ConnectionConfig {
         val s = read()
         return ConnectionConfig(
@@ -101,6 +108,7 @@ class SettingsRepository @Inject constructor(
             putString(KEY_BASE_URL, updated.baseUrl)
             putString(KEY_API_KEY, updated.apiKey)
             putString(KEY_MODEL, updated.model)
+            putString(KEY_STT_MODEL, updated.sttModel)
             putString(KEY_SYSTEM_PROMPT, updated.systemPrompt)
             putFloat(KEY_TTS_SPEED, updated.ttsSpeed)
             putString(KEY_TTS_VOICE, updated.ttsVoiceId)
@@ -119,6 +127,8 @@ class SettingsRepository @Inject constructor(
             ?: AppSettings.DEFAULT_BASE_URL,
         apiKey = prefs.getString(KEY_API_KEY, "").orEmpty(),
         model = prefs.getString(KEY_MODEL, "").orEmpty(),
+        sttModel = prefs.getString(KEY_STT_MODEL, AppSettings.DEFAULT_STT_MODEL)
+            ?: AppSettings.DEFAULT_STT_MODEL,
         systemPrompt = prefs.getString(KEY_SYSTEM_PROMPT, AppSettings.DEFAULT_SYSTEM_PROMPT)
             ?: AppSettings.DEFAULT_SYSTEM_PROMPT,
         ttsSpeed = prefs.getFloat(KEY_TTS_SPEED, 1.0f),
@@ -143,6 +153,7 @@ class SettingsRepository @Inject constructor(
         private const val KEY_BASE_URL = "api_base_url"
         private const val KEY_API_KEY = "api_key"
         private const val KEY_MODEL = "model"
+        private const val KEY_STT_MODEL = "stt_model"
         private const val KEY_SYSTEM_PROMPT = "system_prompt"
         private const val KEY_TTS_SPEED = "tts_speed"
         private const val KEY_TTS_VOICE = "tts_voice"

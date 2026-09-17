@@ -147,10 +147,21 @@ fun ConversationScreen(
     // item is the session controls; the typing row is pinned below the list so it
     // stays visible above the keyboard without any IME scrolling.
     val lastItemIndex = {
-        val count = conversationItemCount(messages.size, state.phase, state.partialResponse, state.partialTranscript)
+        val count = conversationItemCount(
+            messages.size,
+            state.phase,
+            state.partialResponse,
+            state.partialTranscript,
+            state.transcribing,
+        )
         if (count > 0) count - 1 else -1
     }
-    androidx.compose.runtime.LaunchedEffect(messages.size, state.partialResponse, state.partialTranscript) {
+    androidx.compose.runtime.LaunchedEffect(
+        messages.size,
+        state.partialResponse,
+        state.partialTranscript,
+        state.transcribing,
+    ) {
         if (lastItemIndex() >= 0) listState.animateScrollToItem(lastItemIndex())
     }
 
@@ -204,6 +215,15 @@ fun ConversationScreen(
             if (state.phase == SessionPhase.LISTENING && state.partialTranscript.isNotBlank()) {
                 item(key = "partial-user") {
                     MessageBubble(role = Role.USER, text = state.partialTranscript, dimmed = true)
+                }
+            }
+
+            // Speech has ended and the clip is being transcribed. The mic is
+            // already closed at this point, so say so rather than leaving the
+            // listening indicator up with nothing happening.
+            if (state.phase == SessionPhase.LISTENING && state.transcribing) {
+                item(key = "transcribing") {
+                    MessageBubble(role = Role.USER, text = "Transcribing…", dimmed = true)
                 }
             }
 
@@ -316,10 +336,12 @@ private fun conversationItemCount(
     phase: SessionPhase,
     partialResponse: String,
     partialTranscript: String,
+    transcribing: Boolean,
 ): Int {
     var count = messageCount
     if (partialResponse.isNotBlank() && (phase == SessionPhase.THINKING || phase == SessionPhase.SPEAKING)) count++
     if (phase == SessionPhase.LISTENING && partialTranscript.isNotBlank()) count++
+    if (phase == SessionPhase.LISTENING && transcribing) count++
     // Trailing session-controls item.
     return count + 1
 }

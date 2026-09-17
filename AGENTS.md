@@ -7,7 +7,7 @@ in sync when architecture or conventions change.
 
 **Chirp** — a native Android app (Kotlin + Jetpack Compose) for hands-free voice
 conversations with AI models via **OpenRouter** (default) or any OpenAI-compatible
-endpoint. The loop: speak → on-device STT → stream the reply from the chat backend →
+endpoint. The loop: speak → STT (app-owned mic + VAD + transcription) → stream the reply →
 speak it back sentence-by-sentence → auto-listen again. Runs in a foreground service
 so it survives screen-off while walking with Bluetooth headphones. No custom backend —
 the app talks directly to `https://openrouter.ai/api/v1` (bearer key); the advanced
@@ -28,6 +28,9 @@ gradle wrapper
 - Requires **JDK 17** and the **Android SDK** (platform 35). Some sandboxes have no
   Android SDK — `:core:test` only needs the JDK, so prefer it for quick checks.
 - Dependency versions live in `gradle/libs.versions.toml`.
+- `app/src/main/assets/silero_vad.onnx` (~2.3MB, MIT) is the voice-activity model,
+  run via ONNX Runtime. It is committed deliberately — STT does not work without
+  it. Source: <https://github.com/snakers4/silero-vad>.
 
 ## Module / package map
 
@@ -38,13 +41,13 @@ Two Gradle modules — **respect the boundary**:
   and reusable by the future `:wear` module.
   - `model/` `session/` `speech/` `chat/` `wear/` `util/`
   - Key types: `SessionController` (the loop), `SentenceBuffer`, `OpenAiStreamParser`,
-    the `SpeechToTextEngine`/`TextToSpeechEngine`/`ChatClient`/`ConversationStore`/
+    the `SpeechToTextEngine`/`TextToSpeechEngine`/`Transcriber`/`ChatClient`/`ConversationStore`/
     `SettingsProvider` **interfaces**, and `WearContract` (Phase 2).
 - **`:app`** — Android. Implements the `:core` interfaces and adds everything
   framework-specific: `data/` (Room + EncryptedSharedPreferences), `network/`
-  (OkHttp OpenRouter/OpenAI-compatible client), `speech/` (SpeechRecognizer/TextToSpeech), `audio/`
-  (focus + Bluetooth SCO + MediaSession), `service/` (foreground service +
-  notification), `ui/` (Compose), `di/` (Hilt).
+  (OkHttp OpenRouter/OpenAI-compatible client + transcription), `speech/`
+  (app-owned mic pipeline + TextToSpeech), `audio/` (focus + Bluetooth SCO),
+  `service/` (foreground service + notification), `ui/` (Compose), `di/` (Hilt).
 
 `:app` depends on `:core`. `:core` depends on nothing Android. See the README
 "Architecture" section for the annotated tree.
@@ -60,7 +63,7 @@ Two Gradle modules — **respect the boundary**:
    `control { ... }` (holds `loopMutex`); never poke `loopJob` directly.
    Interrupting a reply mid-stream persists the partial text (marked `…`) so
    nothing the user heard is lost.
-2. **One control funnel:** UI / notification buttons / headset media buttons /
+2. **One control funnel:** UI / notification buttons /
    (future) Wear → `ConversationService` action intents → `SessionController`. Add
    new control entry points as **service actions**, not by calling the controller
    from arbitrary places.
@@ -107,16 +110,20 @@ server tool; search runs server-side and never interrupts the token stream.
   starting it requires `RECORD_AUDIO` to be granted. **Every** session start (mic
   tap *and* type-while-idle) is gated on the mic permission in `ConversationScreen`
   — keep any new start path gated too.
-- `SpeechRecognizer` must be created/driven on the **main thread**
-  (`AndroidSpeechToText` posts to the main `Handler`). Don't call it off-main.
-- The recognizer's own silence-timeout extras are advisory and frequently
-  ignored by the platform — `AndroidSpeechToText` + `core/speech/SttTurnWindow`
-  enforce the "Listening silence timeout" setting themselves (restarting
-  recognizer sessions and stitching transcripts across a whole turn), with a
-  fixed 30 s non-resettable ceiling in `ConversationService` as a last resort.
-  Only recognized text counts as voice for this — never raw mic amplitude
-  (`onRmsChanged`), which can't tell speech from background noise. See
-  `docs/listening-timeout.md` before touching any of this.
+- **STT does not use `android.speech.SpeechRecognizer`.** Chirp owns the mic:
+  `AudioRecord` → Silero VAD → an `/audio/transcriptions` call
+  (`app/speech/PipelineSpeechToText` + `app/speech/mic/`). The platform
+  recognizer plays an unsuppressable earcon on every `startListening()` and
+  would not honour the configured silence window; see
+  `docs/speech-recognizer-beep-investigation.md` for the evidence before
+  proposing a return to it.
+- `core/speech/UtteranceAssembler` owns the "has the user stopped talking?"
+  decision and enforces the "Listening silence timeout" setting exactly, with a
+  fixed 90 s non-resettable ceiling in `ConversationService` as a last resort.
+  Only VAD-detected speech counts — never raw mic amplitude, which can't tell
+  speech from wind or traffic. RMS is reported to the UI for the mic pulse and
+  must never feed the silence decision. See `docs/listening-timeout.md` before
+  touching any of this.
 - Bluetooth: SCO stays on for the whole session (mic-routing priority). TTS routing
   switches between `USAGE_VOICE_COMMUNICATION` (SCO) and `USAGE_MEDIA` (no headset)
   via `AudioRouteManager.isBluetoothHeadsetConnected()` →

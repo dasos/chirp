@@ -21,8 +21,12 @@ interface ChatClient {
      */
     fun streamChat(spec: ChatRequestSpec): Flow<ChatStreamEvent>
 
-    /** Fetches available models from `GET {base}/models`. */
-    suspend fun listModels(): List<ChatModel>
+    /**
+     * Fetches available models from `GET {base}/models`. Pass an
+     * [outputModality] (e.g. `"transcription"`) to list only the models that
+     * produce it, which is how the speech-to-text model picker is populated.
+     */
+    suspend fun listModels(outputModality: String? = null): List<ChatModel>
 
     /**
      * Asks the model to summarize the given opening messages into a short

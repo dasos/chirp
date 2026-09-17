@@ -16,9 +16,9 @@ stateDiagram-v2
     [*] --> LISTENING: start\n(autoListen = true)
     [*] --> PAUSED: start\n(autoListen = false)
 
-    LISTENING --> THINKING: transcript submitted
+    LISTENING --> THINKING: speech ends → transcribed\n(transcribing = true meanwhile)
     LISTENING --> LISTENING: silent re-listen\n(no-speech retries)
-    LISTENING --> PAUSED: park — sustained silence\n(configurable) / 30 s ceiling /\nfocus loss / hold
+    LISTENING --> PAUSED: park — sustained silence\n(configurable) / 90 s ceiling /\nfocus loss / hold
     LISTENING --> [*]: stop()
 
     THINKING --> SPEAKING: first sentence spoken
@@ -51,7 +51,7 @@ at that point, so IDLE is never a visible notification state.
 | `SessionPhase` | Card title | Card content | Actions | Mic |
 |---|---|---|---|---|
 | *(startup)* | Starting… | Starting… | — | off/starting |
-| `LISTENING` | Listening… | `“<partial transcript>”` or **Listening…** | Stop | **on** |
+| `LISTENING` | Listening… | `“<partial transcript>”`, **Transcribing…** (while `transcribing`), or **Listening…** | Stop | **on** → off once transcribing |
 | `THINKING` | Thinking… | partial response or **Waiting for the model…** (+ chronometer) | Stop | off |
 | `SPEAKING` | Speaking… | partial response or **Speaking…** | **Stop speaking**, Stop | off |
 | `PAUSED` (from active turn) | — | *(immediately hands over to the standby prompt)* | — | off |
@@ -66,7 +66,7 @@ streaming), always `.setOngoing(true)` + silent, on the `IMPORTANCE_LOW` channel
 ### Standby "Continue conversation?" prompt (regular notification
 
 Posted by `ConversationService.stopSession(showStandby = true)` when the loop parks
-**from an active turn** — 30 s of capped listening, audio-focus loss, or
+**from an active turn** — the capped listening ceiling, audio-focus loss, or
 headset-hold. The foreground service is fully torn down first (`stopForeground(REMOVE)` +
 `stopSelf`), so the mic (and its green indicator) is off during the prompt..
 
@@ -94,10 +94,10 @@ the same `conversationId` rather than a wake-up of a hot loop..
   lifetime — so "notification gone" ⇔ "session over"/standby handover; there is
   no way to keep a session alive with no card..
 - Listening never stays hot forever, enforced by the app itself rather than
-  trusted to the on-device recognizer. `ConversationService`'s
-  `LISTENING_SILENCE_TIMEOUT_MS` (30 s) is a fixed, non-resettable ceiling
+  trusted to a platform recognizer. `ConversationService`'s
+  `LISTENING_SILENCE_TIMEOUT_MS` (90 s) is a fixed, non-resettable ceiling
   anchored to when `LISTENING` is entered — the last-resort backstop behind
-  `AndroidSpeechToText`/`SttTurnWindow`'s own primary silence enforcement. See
+  `PipelineSpeechToText`/`UtteranceAssembler`'s own primary silence enforcement. See
   [`listening-timeout.md`](listening-timeout.md) for the full design
   (what counts as "silence," why it's a two-layer setup, and known
   limitations).

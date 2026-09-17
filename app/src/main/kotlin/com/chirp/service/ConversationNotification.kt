@@ -22,7 +22,7 @@ import javax.inject.Singleton
  *   foreground-service card reflecting the current [SessionPhase] — "Listening…",
  *   "Thinking…", "Speaking…". Removed when the service stops..
  *
- * - **Standby prompt** (`[showStandbyNotification]`): after the session parks (30 s of
+ * - **Standby prompt** (`[showStandbyNotification]`): after the session parks (sustained
  *   silence, focus loss, headset hold), the foreground service tears down and a
  *   regular "Continue conversation?" notification takes its place, with Resume
  *   and End actions. It auto-dismisses (and ends any parked session) after
@@ -178,6 +178,10 @@ class ConversationNotification @Inject constructor(
         state.errorMessage != null && state.phase == SessionPhase.ERROR -> state.errorMessage!!
         state.phase == SessionPhase.LISTENING && state.partialTranscript.isNotBlank() ->
             context.getString(R.string.notification_transcript_quoted, state.partialTranscript)
+        // Speech has ended and the clip is being transcribed — say so, rather
+        // than showing "Listening…" while the mic is already closed.
+        state.phase == SessionPhase.LISTENING && state.transcribing ->
+            context.getString(R.string.notification_transcribing_content)
         state.phase == SessionPhase.LISTENING -> context.getString(R.string.notification_listening_content)
         state.partialResponse.isNotBlank() -> state.partialResponse
 
