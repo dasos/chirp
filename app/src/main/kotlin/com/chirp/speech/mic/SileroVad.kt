@@ -2,20 +2,18 @@ package com.chirp.speech.mic
 
 import ai.onnxruntime.OnnxTensor
 import ai.onnxruntime.OrtEnvironment
-import ai.onnxruntime.OrtException
 import ai.onnxruntime.OrtSession
 import android.content.Context
-import android.util.Log
+import com.chirp.core.speech.Vad
+import com.chirp.core.speech.VadInputWindow
 import dagger.hilt.android.qualifiers.ApplicationContext
-import java.io.Closeable
 import java.nio.FloatBuffer
 import java.nio.LongBuffer
 import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Silero VAD (MIT) run on ONNX Runtime — decides, per frame, whether the frame
- * contains speech.
+ * [Vad] backed by Silero (MIT) on ONNX Runtime.
  *
  * A neural VAD rather than an amplitude gate is the whole point. Chirp is used
  * while walking outdoors, and raw amplitude cannot tell a voice from wind or
@@ -23,14 +21,19 @@ import javax.inject.Singleton
  * treat `onRmsChanged` as voice for exactly that reason. RMS is still reported
  * to the UI for the mic pulse, but it never influences this decision.
  *
- * The model is stateful across frames, so one instance handles one utterance:
- * call [reset] between turns. Not thread-safe — drive it from a single capture
- * coroutine.
+ * Two things carry from frame to frame: the model's own recurrent [state], and
+ * the 64 audio samples [VadInputWindow] prepends to the next frame. Both are
+ * per-utterance, so [reset] clears both.
+ *
+ * The ONNX session is deliberately not [java.io.Closeable]: this is a
+ * `@Singleton` that lives as long as the process, and `SingletonComponent` has
+ * no teardown hook to close it from, so a close method would only describe a
+ * lifecycle nothing honours.
  */
 @Singleton
 class SileroVad @Inject constructor(
     @ApplicationContext private val context: Context,
-) : Closeable {
+) : Vad {
 
     private val env: OrtEnvironment by lazy { OrtEnvironment.getEnvironment() }
 
@@ -39,48 +42,27 @@ class SileroVad @Inject constructor(
         env.createSession(model, OrtSession.SessionOptions())
     }
 
-    /** Silero's recurrent state: shape [2, 1, 128], carried frame to frame. */
+    private val window = VadInputWindow()
+
+    /** Silero's recurrent state (h and c): shape [2, 1, 128], carried frame to frame. */
     private var state = FloatArray(2 * 1 * STATE_WIDTH)
 
     /** Hysteresis: once speaking, it takes a lower score to stop being speech. */
     private var speaking = false
 
-    /** Whether this export wants `sr` as a scalar; see [runModel]. */
-    private var srScalar = true
-    private var srShapeSettled = false
+    override var lastProbability = 0f
+        private set
 
-    fun reset() {
+    override fun reset() {
         state = FloatArray(2 * 1 * STATE_WIDTH)
+        window.reset()
         speaking = false
+        lastProbability = 0f
     }
 
-    /**
-     * Returns true when [frame] contains speech. [frame] must be exactly
-     * [FRAME_SAMPLES] mono PCM16 samples at [SAMPLE_RATE_HZ].
-     */
-    fun isSpeech(frame: ShortArray): Boolean {
-        require(frame.size == FRAME_SAMPLES) {
-            "Silero expects $FRAME_SAMPLES samples per frame, got ${frame.size}"
-        }
-
-        val pcm = FloatArray(FRAME_SAMPLES) { frame[it] / 32768f }
-
-        val inputTensor = OnnxTensor.createTensor(
-            env,
-            FloatBuffer.wrap(pcm),
-            longArrayOf(1, FRAME_SAMPLES.toLong()),
-        )
-        val stateTensor = OnnxTensor.createTensor(
-            env,
-            FloatBuffer.wrap(state),
-            longArrayOf(2, 1, STATE_WIDTH.toLong()),
-        )
-        val probability = try {
-            runModel(inputTensor, stateTensor)
-        } finally {
-            inputTensor.close()
-            stateTensor.close()
-        }
+    override fun isSpeech(frame: ShortArray): Boolean {
+        val probability = score(window.next(frame))
+        lastProbability = probability
 
         // Separate on/off thresholds stop a score hovering at the boundary from
         // chattering between speech and silence mid-word.
@@ -88,45 +70,46 @@ class SileroVad @Inject constructor(
         return speaking
     }
 
-    /**
-     * Runs one frame. Silero has shipped exports that declare the sample-rate
-     * input as a scalar and others that declare it as shape `[1]`; rather than
-     * guessing, the first mismatch flips the shape and retries, after which the
-     * working form is reused for the life of the session.
-     */
-    private fun runModel(input: OnnxTensor, stateIn: OnnxTensor): Float {
-        try {
-            return runWithSampleRate(input, stateIn, srScalar)
-        } catch (e: OrtException) {
-            if (srShapeSettled) throw e
-            srScalar = !srScalar
-            srShapeSettled = true
-            Log.w(TAG, "retrying VAD with sr as ${if (srScalar) "scalar" else "shape [1]"}", e)
-            return runWithSampleRate(input, stateIn, srScalar)
-        }
-    }
-
-    private fun runWithSampleRate(input: OnnxTensor, stateIn: OnnxTensor, scalar: Boolean): Float {
-        val shape = if (scalar) longArrayOf() else longArrayOf(1)
+    /** Runs one frame, advancing [state]. [input] is [Vad.INPUT_SAMPLES] wide. */
+    private fun score(input: FloatArray): Float {
+        val inputTensor = OnnxTensor.createTensor(
+            env,
+            FloatBuffer.wrap(input),
+            longArrayOf(1, input.size.toLong()),
+        )
+        val stateTensor = OnnxTensor.createTensor(
+            env,
+            FloatBuffer.wrap(state),
+            longArrayOf(2, 1, STATE_WIDTH.toLong()),
+        )
+        // Silero dispatches internally on `sr`; it is a 0-d int64 scalar, and a
+        // value other than 16000/8000 fails the run rather than degrading it.
         val srTensor = OnnxTensor.createTensor(
             env,
-            LongBuffer.wrap(longArrayOf(SAMPLE_RATE_HZ.toLong())),
-            shape,
+            LongBuffer.wrap(longArrayOf(Vad.SAMPLE_RATE_HZ.toLong())),
+            longArrayOf(),
         )
+
         return try {
-            session.run(mapOf("input" to input, "state" to stateIn, "sr" to srTensor))
+            session.run(mapOf("input" to inputTensor, "state" to stateTensor, "sr" to srTensor))
                 .use { results ->
                     @Suppress("UNCHECKED_CAST")
-                    val prob = (results[0].value as Array<FloatArray>)[0][0]
+                    val probability = (results.output("output") as Array<FloatArray>)[0][0]
                     @Suppress("UNCHECKED_CAST")
-                    state = flatten(results[1].value as Array<Array<FloatArray>>)
-                    srShapeSettled = true
-                    prob
+                    val nextState = results.output("stateN") as Array<Array<FloatArray>>
+                    state = flatten(nextState)
+                    probability
                 }
         } finally {
+            inputTensor.close()
+            stateTensor.close()
             srTensor.close()
         }
     }
+
+    /** Reads an output by name; positional access would silently survive a reordered export. */
+    private fun OrtSession.Result.output(name: String): Any =
+        get(name).orElseThrow { IllegalStateException("VAD model has no '$name' output") }.value
 
     private fun flatten(nested: Array<Array<FloatArray>>): FloatArray {
         val out = FloatArray(2 * STATE_WIDTH)
@@ -140,21 +123,11 @@ class SileroVad @Inject constructor(
         return out
     }
 
-    override fun close() {
-        runCatching { session.close() }
-    }
+    private companion object {
+        const val MODEL_ASSET = "silero_vad.onnx"
+        const val STATE_WIDTH = 128
 
-    companion object {
-        private const val TAG = "SileroVad"
-        private const val MODEL_ASSET = "silero_vad.onnx"
-        private const val STATE_WIDTH = 128
-
-        /** Silero v5 is fixed at 512 samples per frame at 16kHz (32ms). */
-        const val FRAME_SAMPLES = 512
-        const val SAMPLE_RATE_HZ = 16_000
-        const val FRAME_DURATION_MS = FRAME_SAMPLES * 1000L / SAMPLE_RATE_HZ
-
-        private const val ENTER_THRESHOLD = 0.5f
-        private const val EXIT_THRESHOLD = 0.35f
+        const val ENTER_THRESHOLD = 0.5f
+        const val EXIT_THRESHOLD = 0.35f
     }
 }

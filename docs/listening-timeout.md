@@ -34,7 +34,9 @@ enforced exactly rather than approximated.
 1. **Primary — `UtteranceAssembler` (`:core/speech`) + `PipelineSpeechToText`
    (`:app`).** `MicCapture` delivers fixed 512-sample frames (32ms at 16kHz);
    `SileroVad` classifies each as speech or not; `UtteranceAssembler` turns that
-   stream of verdicts into a decision. The turn ends exactly
+   stream of verdicts into a decision. (The frame the *model* sees is 576 samples —
+   512 new plus 64 carried from the previous frame by `VadInputWindow`. The 512 is
+   the unit of time here; don't conflate the two.) The turn ends exactly
    `silenceTimeoutMs` after the last speech frame — no polling, no restarts, no
    stitching. `UtteranceAssembler` also:
    - keeps a short **pre-roll** of frames from before speech was confirmed, so
@@ -88,7 +90,10 @@ the utterance cap means raising the ceiling with it.
 Thresholds are in `SileroVad` — separate enter (0.5) and exit (0.35) scores, so
 a probability hovering at the boundary does not chatter between speech and
 silence mid-word. Tuning these is the main lever if detection misbehaves in a
-particular environment.
+particular environment; `Vad.lastProbability` is logged per frame so you can see
+what you are tuning against. If detection looks *uniformly* broken rather than
+mistuned, suspect the feeding, not the thresholds — see
+[`stt-vad-investigation-2026-09-17.md`](stt-vad-investigation-2026-09-17.md).
 
 ## Where it's configured
 

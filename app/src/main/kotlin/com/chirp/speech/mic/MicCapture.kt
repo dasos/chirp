@@ -7,6 +7,7 @@ import android.media.MediaRecorder
 import android.media.audiofx.AcousticEchoCanceler
 import android.media.audiofx.NoiseSuppressor
 import android.util.Log
+import com.chirp.core.speech.Vad
 import java.io.Closeable
 import kotlin.math.log10
 import kotlin.math.sqrt
@@ -14,7 +15,7 @@ import kotlin.math.sqrt
 /**
  * Opens the microphone and hands out fixed-size PCM frames.
  *
- * Sized to the VAD: 16kHz mono PCM16 in [SileroVad.FRAME_SAMPLES]-sample frames.
+ * Sized to the VAD: 16kHz mono PCM16 in [Vad.FRAME_SAMPLES]-sample frames.
  * Unlike the platform recognizer, opening `AudioRecord` plays no sound — which
  * is the entire reason this pipeline exists.
  *
@@ -43,7 +44,7 @@ class MicCapture(
     @SuppressLint("MissingPermission") // RECORD_AUDIO is checked before a session starts
     fun start() {
         val minBuffer = AudioRecord.getMinBufferSize(
-            SileroVad.SAMPLE_RATE_HZ,
+            Vad.SAMPLE_RATE_HZ,
             AudioFormat.CHANNEL_IN_MONO,
             AudioFormat.ENCODING_PCM_16BIT,
         )
@@ -59,12 +60,12 @@ class MicCapture(
 
         // Buffer generously: a stall while transcribing must not drop audio on
         // the next turn, and the cost is a few hundred KB at most.
-        val bufferBytes = maxOf(minBuffer, SileroVad.FRAME_SAMPLES * BYTES_PER_SAMPLE * BUFFER_FRAMES)
+        val bufferBytes = maxOf(minBuffer, Vad.FRAME_SAMPLES * BYTES_PER_SAMPLE * BUFFER_FRAMES)
 
         val created = try {
             AudioRecord(
                 source,
-                SileroVad.SAMPLE_RATE_HZ,
+                Vad.SAMPLE_RATE_HZ,
                 AudioFormat.CHANNEL_IN_MONO,
                 AudioFormat.ENCODING_PCM_16BIT,
                 bufferBytes,
@@ -107,7 +108,7 @@ class MicCapture(
      */
     fun readFrame(): ShortArray? {
         val active = record ?: return null
-        val frame = ShortArray(SileroVad.FRAME_SAMPLES)
+        val frame = ShortArray(Vad.FRAME_SAMPLES)
         var offset = 0
         while (offset < frame.size) {
             val read = active.read(frame, offset, frame.size - offset)

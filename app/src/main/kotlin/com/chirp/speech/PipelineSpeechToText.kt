@@ -11,9 +11,9 @@ import com.chirp.core.speech.SttEvent
 import com.chirp.core.speech.Transcriber
 import com.chirp.core.speech.TranscriptionException
 import com.chirp.core.speech.UtteranceAssembler
+import com.chirp.core.speech.Vad
 import com.chirp.core.util.DispatcherProvider
 import com.chirp.speech.mic.MicCapture
-import com.chirp.speech.mic.SileroVad
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
@@ -50,7 +50,7 @@ import javax.inject.Singleton
  */
 @Singleton
 class PipelineSpeechToText @Inject constructor(
-    private val vad: SileroVad,
+    private val vad: Vad,
     private val transcriber: Transcriber,
     private val audioRouteManager: AudioRouteManager,
     private val dispatchers: DispatcherProvider,
@@ -92,7 +92,7 @@ class PipelineSpeechToText @Inject constructor(
         val assembler = UtteranceAssembler(
             startedAtMs = SystemClock.elapsedRealtime(),
             silenceTimeoutMs = config.silenceTimeoutMs,
-            frameDurationMs = SileroVad.FRAME_DURATION_MS,
+            frameDurationMs = Vad.FRAME_DURATION_MS,
         )
 
         // Frames captured for this utterance. Until speech is detected this is
@@ -124,7 +124,11 @@ class PipelineSpeechToText @Inject constructor(
 
                 // Throttled diagnostic: raw level + VAD probability at ~3.1 Hz.
                 if (frameCount % LD == 0L || frameCount == 1L) {
-                    Log.d(TAG, "frame=$frameCount rms=$rms vadProbability=$isSpeech")
+                    Log.d(
+                        TAG,
+                        "frame=$frameCount rms=$rms " +
+                            "vadProbability=${vad.lastProbability} speech=$isSpeech",
+                    )
                 }
 
                 captured.addLast(frame)
@@ -165,7 +169,7 @@ class PipelineSpeechToText @Inject constructor(
 
         emit(SttEvent.EndOfSpeech)
 
-        val clip = PcmClip(flatten(captured), SileroVad.SAMPLE_RATE_HZ)
+        val clip = PcmClip(flatten(captured), Vad.SAMPLE_RATE_HZ)
         Log.d(TAG, "transcribing ${clip.durationMs}ms of audio")
 
         val text = try {
