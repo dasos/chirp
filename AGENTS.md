@@ -31,6 +31,12 @@ gradle wrapper
 - `app/src/main/assets/silero_vad.onnx` (~2.3MB, MIT) is the voice-activity model,
   run via ONNX Runtime. It is committed deliberately — STT does not work without
   it. Source: <https://github.com/snakers4/silero-vad>.
+- **The model consumes 512-sample frames but must be handed a 576-sample tensor**:
+  its STFT pads only on the right, so the caller supplies the 64 samples of
+  left-hand context from the previous frame (`core/speech/VadInputWindow`). Feeding
+  the bare 512 is not an error — ONNX Runtime accepts it and scores speech as
+  silence, which cost a day once already. See
+  `docs/stt-vad-investigation-2026-09-17.md`.
 
 ## Module / package map
 
@@ -41,8 +47,9 @@ Two Gradle modules — **respect the boundary**:
   and reusable by the future `:wear` module.
   - `model/` `session/` `speech/` `chat/` `wear/` `util/`
   - Key types: `SessionController` (the loop), `SentenceBuffer`, `OpenAiStreamParser`,
-    the `SpeechToTextEngine`/`TextToSpeechEngine`/`Transcriber`/`ChatClient`/`ConversationStore`/
-    `SettingsProvider` **interfaces**, and `WearContract` (Phase 2).
+    `UtteranceAssembler`, `VadInputWindow`, the `SpeechToTextEngine`/`TextToSpeechEngine`/
+    `Transcriber`/`Vad`/`ChatClient`/`ConversationStore`/`SettingsProvider` **interfaces**,
+    and `WearContract` (Phase 2).
 - **`:app`** — Android. Implements the `:core` interfaces and adds everything
   framework-specific: `data/` (Room + EncryptedSharedPreferences), `network/`
   (OkHttp OpenRouter/OpenAI-compatible client + transcription), `speech/`
@@ -112,7 +119,9 @@ server tool; search runs server-side and never interrupts the token stream.
   — keep any new start path gated too.
 - **STT does not use `android.speech.SpeechRecognizer`.** Chirp owns the mic:
   `AudioRecord` → Silero VAD → an `/audio/transcriptions` call
-  (`app/speech/PipelineSpeechToText` + `app/speech/mic/`). The platform
+  (`app/speech/PipelineSpeechToText` + `app/speech/mic/`). Detection sits behind the
+  `core/speech/Vad` interface; swapping detectors is one `@Binds` line in
+  `BindingsModule`. The platform
   recognizer plays an unsuppressable earcon on every `startListening()` and
   would not honour the configured silence window; see
   `docs/speech-recognizer-beep-investigation.md` for the evidence before

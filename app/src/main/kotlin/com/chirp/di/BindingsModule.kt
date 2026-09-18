@@ -6,12 +6,14 @@ import com.chirp.core.session.SettingsProvider
 import com.chirp.core.speech.SpeechToTextEngine
 import com.chirp.core.speech.TextToSpeechEngine
 import com.chirp.core.speech.Transcriber
+import com.chirp.core.speech.Vad
 import com.chirp.data.repository.ConversationRepository
 import com.chirp.data.settings.SettingsRepository
 import com.chirp.network.OpenRouterChatClient
 import com.chirp.network.OpenRouterTranscriber
 import com.chirp.speech.AndroidTextToSpeech
 import com.chirp.speech.PipelineSpeechToText
+import com.chirp.speech.mic.SileroVad
 import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn
@@ -34,6 +36,10 @@ abstract class BindingsModule {
     @Binds
     @Singleton
     abstract fun bindTranscriber(impl: OpenRouterTranscriber): Transcriber
+
+    @Binds
+    @Singleton
+    abstract fun bindVad(impl: SileroVad): Vad
 
     @Binds
     @Singleton

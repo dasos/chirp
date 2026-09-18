@@ -67,8 +67,9 @@ Two Gradle modules keep the portable session logic free of Android so it is unit
   session/    SessionPhase, SessionState, SessionCommand, SessionEvent,
               SessionController  ← the hands-free loop (state machine)
               ConversationStore, SettingsProvider  (interfaces the app implements)
-  speech/     SpeechToTextEngine, TextToSpeechEngine, Transcriber (interfaces),
+  speech/     SpeechToTextEngine, TextToSpeechEngine, Transcriber, Vad (interfaces),
               UtteranceAssembler  ← owns "has the user stopped talking?"
+              VadInputWindow      ← the 576-sample frame Silero requires
               SentenceBuffer
   chat/       ChatClient (interface), ChatStreamEvent, OpenAI-compatible wire DTOs,
               OpenAiStreamParser

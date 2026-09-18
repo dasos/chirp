@@ -1,8 +1,8 @@
 # STT pipeline investigation — "mic works, but not converted to text" (2026-09-17)
 
-**Status: unresolved — the neural VAD (Silero) does not classify captured speech as
-speech on this device. A working fix (energy-based detection) is designed but not
-implemented.**
+**Status: resolved 2026-09-18 — the app was feeding Silero a 512-sample tensor
+where the model requires 576 (64 samples of the previous frame, then the 512 new
+ones). Fixed by `VadInputWindow`; the neural VAD works.**
 
 ## Symptom
 
@@ -12,108 +12,111 @@ audio (the UI pulse moved), but no utterance was ever transcribed. Every listeni
 turn ended with `decision=NO_SPEECH speechMs=0` and never reached the
 `OpenRouterTranscriber`.
 
-## What was verified
+## Root cause
 
-### 1. Mic capture is fine
+Silero v5's STFT is a convolution (filter length 256, hop 128) that reflection-pads
+only on its **right** — the `stft/padding/Pad` constant in the 16 kHz branch of the
+graph is `(0, 64)`. The 64 samples of left-hand overlap are therefore the caller's
+to supply. The upstream reference driver (`snakers4/silero-vad`,
+`src/silero_vad/utils_vad.py`, class `OnnxWrapper`) does exactly that:
 
-A diagnostic WAV dump (every captured turn, in `PipelineSpeechToText.dumpClip`)
-was pulled from a Galaxy S24 (SM-S948B) and analyzed:
+```python
+num_samples  = 512   # at 16 kHz
+context_size = 64
+x = torch.cat([self._context, x], dim=1)      # the 'input' tensor is 576 samples
+...
+self._context = x[..., -context_size:]        # carried frame to frame
+```
 
-- `RIFF/WAVE`, 16 kHz mono 16-bit — correct.
-- Your voice is clearly audible in the file; envelope shows a classic speech
-  pattern (frames 26–89), peaks −4.7 dBFS, 2903 zero-crossings/s, only 0.17 %
-  clipped samples.
-- With `effects=false` (`source=6`, `VOICE_RECOGNITION`, Bluetooth off), background
-  noise floor sits at ~−50 dBFS vs speech at −26…−8 dBFS — a clean >20 dB gap.
+`SileroVad` passed the bare 512-sample frame. The graph's input dimension is
+symbolic, so ONNX Runtime accepted it without complaint and returned a plausible
+number computed from three of the four intended STFT frames, on a grid shifted 64
+samples from the one the network was trained on, with the window spanning the
+frame boundary missing entirely.
 
-### 2. The code driving the model is fine
+That silent near-miss is the whole bug. Everything the original investigation
+checked really was fine: the capture, the asset, the state handling, the int16→float
+scaling, the sample-rate dispatch.
 
-The same model + same feeding code was run, with **identical results**, in:
+## The measurement that settles it
 
-- the app on Android (ORT Android 1.22.0),
-- ONNX Runtime on desktop JVM (1.22.0, x86_64),
-- `onnxruntime` Python on the same WAV.
+macOS `say` → `afconvert` produced 6.2 s of 16 kHz mono speech that never went near
+the phone. Both rows below run **the repo's own** `app/src/main/assets/silero_vad.onnx`
+in the same process over the same samples, with the same carried `state`. The only
+difference is the 64 samples:
 
-For three different `sr` input shapes (scalar, `[1]`, `[[1]]`) the outputs are
-identical — the sample-rate dispatch is not the issue.
+| Feeding | max | mean | frames > 0.5 |
+| --- | --- | --- | --- |
+| **512, no context** (what the app did) | 0.129 | 0.0020 | **0 / 194** |
+| **576 = 64 context + 512** (the contract) | 0.999999 | 0.969 | **187 / 194** |
+| all-zeros through the 512 path | 0.000592 | 0.000536 | 0 / 194 |
 
-### 3. The VAD model is (byte-for-byte) the official Silero export
+The third row is the tell. The doc's original field numbers — speech at ~0.0031 and
+a logged trajectory of `5.53E-4 → 5.353987E-4 → …` — sit right on top of the
+**silence floor** of the broken path (0.000592 → 0.000540 → 0.000536 → 0.000535 …).
+The model was not underrating the user's voice; it was reporting silence, correctly,
+about an input that no longer resembled speech.
 
-`app/src/main/assets/silero_vad.onnx` matches the upstream
-`snakers4/silero-vad/src/silero_vad/data/silero_vad.onnx`
-(SHA-256 `1A153A22…8788E3`), and is identical to the mirrors
-(`onnx-community/silero-vad`), and to the repo's numerical export
-`silero_vad_16k_op15.onnx` in behavior. Graph inspection (via the `onnx` python
-package) shows a genuine Silero v5: `sr`-dispatch wrapper → STFT → conv encoder →
-GRU decoder → `Sigmoid`/`ReduceMean`, opset 16, graph producer `spox` (community
-ONNX-export pipeline).
+Because this reproduces on synthetic audio the Galaxy S24 never touched, the two
+root causes the original doc was still entertaining are both dead: device/HAL
+pre-processing cannot shape audio it never saw, and the export cannot be broken
+when the same file scores 0.999999 on the same recording.
 
-## The puzzling fact
+## What the original investigation got wrong
 
-Everything checks out — and yet the model outputs for **all** test signals:
+Worth recording, because the mistakes were methodological rather than technical.
 
-| Input | Model output (max, 30–156 frames) |
-| --- | --- |
-| The user's captured speech (audible voice, −5 dBFS) | ~0.0031 |
-| Synthetic 120 Hz vowel (amp 1.0) | 0.0006 |
-| Synthetic 220 Hz vowel (amp 0.8) | 0.0006 |
-| FM sweep 110–180 Hz | 0.06 |
-| White noise | 0.002 |
-| Pure zeros (silence) | 0.000535 |
+- **"The code driving the model is fine"** rested on running the same model *and the
+  same feeding code* on ORT-Android, ORT-JVM and ORT-Python. Three runtimes, one
+  driver: that establishes the runtimes agree, not that the driver is right. The one
+  control never run was the upstream wrapper, and it was sitting in
+  `pip install silero-vad` the whole time.
+- **The synthetic probes carried no information.** A 120 Hz sine, a vowel-ish tone
+  and an FM sweep scoring low is the *correct* output of a speech detector. Only the
+  real-speech row was diagnostic, and there was only one of it.
+- **Static graph inspection was mistaken for validation.** Dumping the graph
+  confirmed the ops were present; it did not check that they were being fed
+  correctly. Ironically the dump contained the answer — a right-only `Pad` of 64
+  should prompt the question "so where does the left context come from?".
+- **Two diagnostics named as "still in the tree" never existed.** `DUMP_WAVS` and
+  `dumpClip` appear in no commit, so there was no WAV dump to re-examine.
+- **The log that should have caught it was lying.** `PipelineSpeechToText` logged
+  `vadProbability=$isSpeech`, where `isSpeech` is a `Boolean`. The probabilities
+  quoted in the original write-up had to come from a separate instrumented build.
+- The graph's decoder is an **LSTM** (`/decoder/rnn/LSTM`), not a GRU, so `state`
+  `[2,1,128]` is `(h, c)`. And the decaying probability trajectory was an LSTM
+  relaxing to its resting fixed point under featureless input — not error
+  accumulating.
 
-None ever crosses the 0.5 speech threshold; the app's logged
-`vadProbability` values (5.53E-4 → 5.353987E-4 → …) match the "zeros" trajectory
-exactly. The model does *react* to input (zeros vs. noise differ), but speech never
-rises above ~0.003.
+## The fix
 
-## Root-cause reading
+`core/speech/VadInputWindow` (pure, in `:core`, unit-tested by
+`VadInputWindowTest`) owns the 64-sample carry and the int16→float conversion, and
+hands `SileroVad` the 576-float payload. `Vad.FRAME_SAMPLES` stays **512** — that is
+the chunk the mic reads and the unit `UtteranceAssembler` measures time in; only the
+tensor is wider (`Vad.INPUT_SAMPLES`). Conflating the two would silently move the
+frame duration from 32 ms to 36 ms and skew every listening timeout.
 
-The interaction of a *known-good* model with *known-good* audio and *known-good*
-driving code, that consistently scores speech at ~0.0005, is not a driver or asset
-bug we could isolate further. The likely explanations remaining:
+Also fixed while here: the `vadProbability` log now prints the real score
+(`Vad.lastProbability`); the speculative `sr` scalar-vs-`[1]` retry is gone (the
+contract is a 0-d int64 scalar, and a wrong value fails the run rather than
+degrading it — `sr=8000` raises rather than silently taking the 8 kHz branch);
+outputs are read by name instead of position; and detection now sits behind the
+`Vad` interface in `:core`.
 
-1. The capture's spectral character (device/`VOICE_RECOGNITION` pre-processing
-   that the HAL applies regardless of the app's `effects=false`) is not what
-   Silero expects, or
-2. the community-exported ONNX behaves differently from the reference PyTorch
-   model in a way that leaves its speech responses collapsed, or
-3. both.
+## Rejected: the energy-gate workaround
 
-In either case the neural-VAD path is a practical dead end on this hardware for
-now.
+The original write-up recommended replacing the end-of-speech decision with an
+adaptive RMS gate in `UtteranceAssembler`. **Do not implement this.** It contradicts
+that class's own contract and `listening-timeout.md`: amplitude cannot tell speech
+from wind or traffic, which is the bug that used to hold the listening window open
+forever outdoors — and Chirp's whole use case is walking outdoors. It was a
+workaround for a VAD believed unfixable, and the VAD was six lines from correct.
 
-## Interim fixes attempted
+## If the VAD ever misbehaves again
 
-- **Sigmoid on the raw output** (wrong — output is already post-activation;
-  turned the flat constant into `≈0.5001`, which falsely fired "speech" on
-  silence). **Reverted.**
-- **AEC/NoiseSuppressor gating** in `MicCapture` — keep effects only on the
-  `VOICE_COMMUNICATION`/Bluetooth path; the `VOICE_RECOGNITION` path now runs
-  clean (`effects=false`). **Kept** (harmless, arguably more correct), but did
-  not fix the VAD.
-- **Diagnostics added** (still in the tree): throttled per-frame
-  RMS + VAD logs, VAD failure logging, upload/response logging in
-  `OpenRouterTranscriber`, and full-turn WAV dumps in `PipelineSpeechToText`
-  (`DUMP_WAVS` flag in the companion object).
-
-## Recommended fix (not yet implemented)
-
-Replace the neural VAD's end-of-speech decision with a **simple adaptive energy
-gate** in the core `UtteranceAssembler`:
-
-- background noise floor estimated from the first N frames (e.g. 10),
-- speech onset when frame RMS exceeds floor + ~6 dB, hold/end on the existing
-  silence timeout,
-- the captured audio shows a clean >20 dB separation, so this is robust here.
-
-Keep the Silero path behind a flag/config so a working export can be swapped in
-later without touching the loop. Update `UtteranceAssemblerTest` accordingly.
-
-## Follow-ups if the VAD is revisited
-
-- Compare the ONNX output against the reference PyTorch model
-  (`torch.hub.load("snakers4/silero-vad", "silero_vad")`) on the same WAV to
-  determine whether the ONNX export itself is the problem.
-- Check whether the S24 `VOICE_RECOGNITION` path subtly transforms the signal
-  (frequency shaping/AGC) beyond what the app controls.
-- Consider `MediaRecorder.AudioSource.UNPROCESSED` for capture.
+Start by reproducing the table above — synthesise a WAV with `say`, and run the
+committed asset with and without the context carry. That takes minutes and
+distinguishes a driver bug from an audio problem before anything else is touched.
+`VadInputWindowTest` guards the framing contract; it cannot catch a wrong sample
+rate or a swapped asset, which is what that script is for.
