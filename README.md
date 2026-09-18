@@ -85,7 +85,7 @@ Two Gradle modules keep the portable session logic free of Android so it is unit
                    OpenRouterTranscriber (implements Transcriber), WavEncoder
   speech/          PipelineSpeechToText (AudioRecord → VAD → Transcriber), AndroidTextToSpeech
   speech/mic/      MicCapture (AudioRecord), SileroVad (ONNX voice-activity detection)
-  audio/           AudioRouteManager (focus + Bluetooth SCO)
+  audio/           AudioRouteManager (focus + Bluetooth SCO), ListeningCues (mic open/close earcons)
   service/         ConversationService (foreground), ConversationNotification
   ui/              theme, navigation, home, conversation, settings, components, permissions
   di/              Hilt modules (bind :core interfaces → Android impls)
@@ -221,7 +221,7 @@ To add it later: create a `:wear` module (uncomment the include in `settings.gra
 ## Known limitations
 
 - **Bluetooth audio uses SCO for the whole session** (not A2DP). SCO is mono/narrowband, so TTS quality over Bluetooth is "phone-call" grade rather than music-grade. This is the trade-off for using the headset microphone hands-free; per-turn SCO toggling would improve playback quality at the cost of ~1–2s of latency each turn. TTS routing falls back to loud media output when no SCO headset is present.
-- **Speech-to-text needs network.** Chirp records the mic itself and sends each utterance to the configured `/audio/transcriptions` endpoint, so STT does not work offline. This replaced the platform `SpeechRecognizer`, which played an unsuppressable beep on every listening session and would not honour the configured silence window — see `docs/speech-recognizer-beep-investigation.md`. Transcription adds a short pause after you stop speaking, and is billed per second on the same account as chat. The `Transcriber` interface exists so an on-device model can replace it.
+- **Speech-to-text needs network.** Chirp records the mic itself and sends each utterance to the configured `/audio/transcriptions` endpoint, so STT does not work offline. This replaced the platform `SpeechRecognizer`, which played an unsuppressable beep on every listening session and would not honour the configured silence window — see `docs/speech-recognizer-beep-investigation.md`. Transcription adds a short pause after you stop speaking, and is billed per second on the same account as chat. The `Transcriber` interface exists so an on-device model can replace it. Chirp now plays its *own* short earcons (`ListeningCues`) as the mic opens and closes — deliberately, around the recorder rather than into it, so hands-free users can hear when it is recording.
 - **Mid-stream network drops are not resumed**: retries with backoff happen only before any tokens arrive (the chat APIs can't resume a partial generation, and re-requesting would duplicate already-spoken text). After tokens start, a drop ends the turn with a spoken "Connection lost" and keeps whatever was received.
 - **Web search is server-side** and billed per search by OpenRouter; generic OpenAI-compatible gateways may not support the `openrouter:web_search` tool, so disable the toggle when pointing at one.
 - **Sentence splitting is heuristic.** It handles decimals, common abbreviations, initials and dotted acronyms, but unusual punctuation may split imperfectly; a long unpunctuated stream is flushed at word boundaries so speech never stalls.

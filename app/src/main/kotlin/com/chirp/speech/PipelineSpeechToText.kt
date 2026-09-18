@@ -3,6 +3,7 @@ package com.chirp.speech
 import android.os.SystemClock
 import android.util.Log
 import com.chirp.audio.AudioRouteManager
+import com.chirp.audio.ListeningCues
 import com.chirp.core.speech.PcmClip
 import com.chirp.core.speech.SpeechToTextEngine
 import com.chirp.core.speech.SttConfig
@@ -39,7 +40,8 @@ import javax.inject.Singleton
  * turn and stitch the fragments together, which is exactly what turned one beep
  * into several.
  *
- * Owning the microphone fixes both: nothing here plays a sound, and
+ * Owning the microphone fixes both: the only sounds are Chirp's own [ListeningCues]
+ * earcons, played deliberately around the recorder rather than into it, and
  * [UtteranceAssembler] ends the turn at exactly `silenceTimeoutMs` after the
  * last speech frame.
  *
@@ -53,6 +55,7 @@ class PipelineSpeechToText @Inject constructor(
     private val vad: Vad,
     private val transcriber: Transcriber,
     private val audioRouteManager: AudioRouteManager,
+    private val cues: ListeningCues,
     private val dispatchers: DispatcherProvider,
 ) : SpeechToTextEngine {
 
@@ -78,10 +81,16 @@ class PipelineSpeechToText @Inject constructor(
             preferCommunicationSource = audioRouteManager.isBluetoothHeadsetConnected(),
         )
 
+        // Sound the "listening" earcon and let it finish before the recorder
+        // opens, so the cue cannot end up in the utterance we transcribe.
+        cues.playAndAwait(ListeningCues.Cue.START)
+
         try {
             mic.start()
         } catch (e: MicCapture.MicUnavailableException) {
             Log.w(TAG, "microphone unavailable", e)
+            // The user has already heard the mic go live; close the pair.
+            cues.play(ListeningCues.Cue.STOP)
             emit(SttEvent.Error(SttError.AUDIO))
             return
         }
@@ -159,6 +168,9 @@ class PipelineSpeechToText @Inject constructor(
             // second or more, and holding the recorder open through it keeps the
             // SCO link busy for no reason.
             mic.close()
+            // Fire-and-forget: this runs on the cancellation path too, where a
+            // suspending call would be cut short before the cue was queued.
+            cues.play(ListeningCues.Cue.STOP)
         }
 
         if (outcome != UtteranceAssembler.Decision.FINISH) {

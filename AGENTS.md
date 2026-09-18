@@ -53,7 +53,7 @@ Two Gradle modules — **respect the boundary**:
 - **`:app`** — Android. Implements the `:core` interfaces and adds everything
   framework-specific: `data/` (Room + EncryptedSharedPreferences), `network/`
   (OkHttp OpenRouter/OpenAI-compatible client + transcription), `speech/`
-  (app-owned mic pipeline + TextToSpeech), `audio/` (focus + Bluetooth SCO),
+  (app-owned mic pipeline + TextToSpeech), `audio/` (focus + Bluetooth SCO + listening earcons),
   `service/` (foreground service + notification), `ui/` (Compose), `di/` (Hilt).
 
 `:app` depends on `:core`. `:core` depends on nothing Android. See the README
@@ -126,6 +126,14 @@ server tool; search runs server-side and never interrupts the token stream.
   would not honour the configured silence window; see
   `docs/speech-recognizer-beep-investigation.md` for the evidence before
   proposing a return to it.
+- **Chirp's own earcons are the exception to "the mic pipeline is silent."**
+  `audio/ListeningCues` plays `res/raw/chirp_start_listening.wav` *before*
+  `AudioRecord` opens (awaited to completion) and
+  `res/raw/chirp_stop_listening.wav` *after* it is released, so neither cue can
+  land in the transcribed utterance. Keep that ordering. Routing mirrors TTS
+  (`USAGE_VOICE_COMMUNICATION` on a headset, `USAGE_MEDIA` otherwise) — a cue the
+  user cannot hear in their headphones is worse than no cue. The clip length is
+  measured from the resource, not hard-coded, so swapping a wav stays safe.
 - `core/speech/UtteranceAssembler` owns the "has the user stopped talking?"
   decision and enforces the "Listening silence timeout" setting exactly, with a
   fixed 90 s non-resettable ceiling in `ConversationService` as a last resort.
