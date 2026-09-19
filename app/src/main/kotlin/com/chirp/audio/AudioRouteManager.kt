@@ -91,13 +91,13 @@ class AudioRouteManager @Inject constructor(
      * screen-off) even though the headset stays connected, and this heals the
      * link exactly when the mic or speaker is about to be used.
      */
-    fun reassertCommunicationRoute() {
-        if (!sessionActive) return
+    fun reassertCommunicationRoute(): Boolean {
+        if (!sessionActive) return false
         if (isBluetoothHeadsetConnected()) {
-            routeToBluetoothIfAvailable()
-        } else {
-            Log.d(TAG, "reassert: no headset connected, leaving routing alone")
+            return routeToBluetoothIfAvailable()
         }
+        Log.d(TAG, "reassert: no headset connected, leaving routing alone")
+        return false
     }
 
     @SuppressLint("MissingPermission")
@@ -127,20 +127,21 @@ class AudioRouteManager @Inject constructor(
         focusRequest = null
     }
 
-    private fun routeToBluetoothIfAvailable() {
+    private fun routeToBluetoothIfAvailable(): Boolean {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             val device = audioManager.availableCommunicationDevices
                 .firstOrNull { it.type == AudioDeviceInfo.TYPE_BLUETOOTH_SCO }
-            if (device != null) {
-                audioManager.mode = AudioManager.MODE_IN_COMMUNICATION
-                val ok = runCatching { audioManager.setCommunicationDevice(device) }.getOrDefault(false)
-                Log.d(TAG, "routeToBluetoothIfAvailable: setCommunicationDevice($device) -> $ok")
-            } else {
+            if (device == null) {
                 Log.d(TAG, "routeToBluetoothIfAvailable: no SCO device found")
+                return false
             }
-        } else {
-            legacyStartSco()
+            audioManager.mode = AudioManager.MODE_IN_COMMUNICATION
+            val ok = runCatching { audioManager.setCommunicationDevice(device) }.getOrDefault(false)
+            Log.d(TAG, "routeToBluetoothIfAvailable: setCommunicationDevice($device) -> $ok")
+            return ok
         }
+        legacyStartSco()
+        return true
     }
 
     @Suppress("DEPRECATION")

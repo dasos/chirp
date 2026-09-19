@@ -193,8 +193,8 @@ class ConversationService : LifecycleService() {
 
 
 
-                    audioRouteManager.reassertCommunicationRoute()
-                    tts.applyCommunicationRouting(audioRouteManager.isBluetoothHeadsetConnected())
+                    val bluetoothRouting = audioRouteManager.reassertCommunicationRoute()
+                    tts.applyCommunicationRouting(bluetoothRouting)
                 }
 
 
