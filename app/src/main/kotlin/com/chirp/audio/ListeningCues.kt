@@ -163,7 +163,7 @@ class ListeningCues @Inject constructor(
         const val TAG = "ListeningCues"
 
         /** The clips peak just under full scale; speech does not. */
-        const val VOLUME = 0.6f
+        const val VOLUME = 1f
 
         const val PRIORITY = 1
 
