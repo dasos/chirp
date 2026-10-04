@@ -5,6 +5,7 @@ import android.media.AudioAttributes
 import android.os.Bundle
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
+import android.util.Log
 import com.chirp.core.speech.TextToSpeechEngine
 import com.chirp.core.speech.TtsException
 import com.chirp.core.speech.TtsVoice
@@ -52,6 +53,7 @@ class AndroidTextToSpeech @Inject constructor(
         }
 
         override fun onStop(utteranceId: String?, interrupted: Boolean) {
+            Log.d(TAG, "utterance stopped: id=$utteranceId interrupted=$interrupted")
             utteranceId?.let { pending.remove(it)?.let { c -> if (c.isActive) c.resume(Unit) } }
         }
 
@@ -96,6 +98,7 @@ class AndroidTextToSpeech @Inject constructor(
         suspendCancellableCoroutine { cont ->
             pending[utteranceId] = cont
             cont.invokeOnCancellation {
+                Log.d(TAG, "utterance cancelled: id=$utteranceId")
                 pending.remove(utteranceId)
                 runCatching { engine.stop() }
             }
@@ -172,5 +175,9 @@ class AndroidTextToSpeech @Inject constructor(
             .setUsage(usage)
             .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
             .build()
+    }
+
+    private companion object {
+        const val TAG = "AndroidTextToSpeech"
     }
 }

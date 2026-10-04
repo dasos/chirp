@@ -4,13 +4,25 @@ import android.annotation.SuppressLint
 import android.bluetooth.BluetoothManager
 import android.bluetooth.BluetoothProfile
 import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.media.AudioAttributes
 import android.media.AudioDeviceInfo
+import android.media.AudioDeviceCallback
 import android.media.AudioFocusRequest
 import android.media.AudioManager
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
+import androidx.core.content.ContextCompat
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -42,6 +54,29 @@ class AudioRouteManager @Inject constructor(
     private var focusCallback: FocusCallback? = null
 
     @Volatile private var sessionActive = false
+    private val routeScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private var routeRetryJob: Job? = null
+    private var observersRegistered = false
+
+    private val audioDeviceCallback = object : AudioDeviceCallback() {
+        override fun onAudioDevicesAdded(addedDevices: Array<out AudioDeviceInfo>) {
+            if (sessionActive) scheduleRouteRetry("devices added")
+        }
+
+        override fun onAudioDevicesRemoved(removedDevices: Array<out AudioDeviceInfo>) {
+            if (sessionActive) scheduleRouteRetry("devices removed")
+        }
+    }
+
+    private val screenReceiver = object : android.content.BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (!sessionActive) return
+            when (intent?.action) {
+                Intent.ACTION_SCREEN_OFF -> scheduleRouteRetry("screen off")
+                Intent.ACTION_SCREEN_ON -> scheduleRouteRetry("screen on")
+            }
+        }
+    }
 
     interface FocusCallback {
         fun onFocusLost()
@@ -70,15 +105,20 @@ class AudioRouteManager @Inject constructor(
     fun startSession(callback: FocusCallback): Boolean {
         focusCallback = callback
         sessionActive = true
+        registerObservers()
         val granted = requestFocus()
-        Log.d(TAG, "startSession: focusGranted=$granted")
+        Log.d(TAG, "startSession: focusGranted=$granted headset=${isBluetoothHeadsetConnected()}")
         reassertCommunicationRoute()
+        scheduleRouteRetry("session start")
         return granted
     }
 
     fun endSession() {
         Log.d(TAG, "endSession")
         sessionActive = false
+        routeRetryJob?.cancel()
+        routeRetryJob = null
+        unregisterObservers()
         stopBluetoothRouting()
         abandonFocus()
         focusCallback = null
@@ -94,7 +134,9 @@ class AudioRouteManager @Inject constructor(
     fun reassertCommunicationRoute(): Boolean {
         if (!sessionActive) return false
         if (isBluetoothHeadsetConnected()) {
-            return routeToBluetoothIfAvailable()
+            val routed = routeToBluetoothIfAvailable()
+            if (!routed) scheduleRouteRetry("route unavailable")
+            return routed
         }
         Log.d(TAG, "reassert: no headset connected, leaving routing alone")
         return false
@@ -132,12 +174,20 @@ class AudioRouteManager @Inject constructor(
             val device = audioManager.availableCommunicationDevices
                 .firstOrNull { it.type == AudioDeviceInfo.TYPE_BLUETOOTH_SCO }
             if (device == null) {
-                Log.d(TAG, "routeToBluetoothIfAvailable: no SCO device found")
+                Log.d(
+                    TAG,
+                    "routeToBluetoothIfAvailable: no SCO device found; " +
+                        "available=${audioManager.availableCommunicationDevices.joinToString()}",
+                )
                 return false
             }
             audioManager.mode = AudioManager.MODE_IN_COMMUNICATION
             val ok = runCatching { audioManager.setCommunicationDevice(device) }.getOrDefault(false)
-            Log.d(TAG, "routeToBluetoothIfAvailable: setCommunicationDevice($device) -> $ok")
+            Log.d(
+                TAG,
+                "routeToBluetoothIfAvailable: setCommunicationDevice($device) -> $ok " +
+                    "selected=${audioManager.communicationDevice}",
+            )
             return ok
         }
         legacyStartSco()
@@ -166,7 +216,47 @@ class AudioRouteManager @Inject constructor(
         runCatching { audioManager.mode = AudioManager.MODE_NORMAL }
     }
 
+    private fun scheduleRouteRetry(reason: String) {
+        if (!sessionActive || !isBluetoothHeadsetConnected()) return
+        routeRetryJob?.cancel()
+        routeRetryJob = routeScope.launch {
+            repeat(ROUTE_RETRY_COUNT) { attempt ->
+                if (!sessionActive || !isBluetoothHeadsetConnected()) return@launch
+                if (routeToBluetoothIfAvailable()) {
+                    Log.d(TAG, "route retry succeeded: reason=$reason attempt=${attempt + 1}")
+                    return@launch
+                }
+                delay(ROUTE_RETRY_DELAY_MS)
+            }
+            Log.w(TAG, "route retry exhausted: reason=$reason")
+        }
+    }
+
+    private fun registerObservers() {
+        if (observersRegistered) return
+        audioManager.registerAudioDeviceCallback(audioDeviceCallback, Handler(Looper.getMainLooper()))
+        ContextCompat.registerReceiver(
+            context,
+            screenReceiver,
+            IntentFilter().apply {
+                addAction(Intent.ACTION_SCREEN_OFF)
+                addAction(Intent.ACTION_SCREEN_ON)
+            },
+            ContextCompat.RECEIVER_NOT_EXPORTED,
+        )
+        observersRegistered = true
+    }
+
+    private fun unregisterObservers() {
+        if (!observersRegistered) return
+        runCatching { audioManager.unregisterAudioDeviceCallback(audioDeviceCallback) }
+        runCatching { context.unregisterReceiver(screenReceiver) }
+        observersRegistered = false
+    }
+
     companion object {
         private const val TAG = "AudioRouteManager"
+        private const val ROUTE_RETRY_COUNT = 6
+        private const val ROUTE_RETRY_DELAY_MS = 250L
     }
 }

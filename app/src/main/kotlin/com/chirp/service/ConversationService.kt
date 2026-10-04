@@ -193,8 +193,11 @@ class ConversationService : LifecycleService() {
 
 
 
-                    val bluetoothRouting = audioRouteManager.reassertCommunicationRoute()
-                    tts.applyCommunicationRouting(bluetoothRouting)
+                    audioRouteManager.reassertCommunicationRoute()
+                    // A route attempt can fail while Android is rebuilding SCO.
+                    // Keep the communication usage while the HFP profile remains
+                    // connected; one failed attempt must not force A2DP/media.
+                    tts.applyCommunicationRouting(audioRouteManager.isBluetoothHeadsetConnected())
                 }
 
 
