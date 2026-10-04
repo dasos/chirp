@@ -16,7 +16,13 @@ base-URL setting points it at any OpenAI-compatible gateway (e.g. self-hosted Li
 ## Build / test / run
 
 ```bash
-# The Gradle wrapper JAR is NOT committed — generate it once (or open in Android Studio):
+# No JDK/Gradle installed? This caches JDK 17 + Gradle 8.11.1 in
+# ~/.cache/chirp-toolchain and invokes Gradle directly (no wrapper JAR needed):
+scripts/chirp-test.sh                   # JVM unit tests — FAST, no Android SDK needed
+scripts/chirp-test.sh assembleDebug     # any Gradle args are forwarded
+
+# With a local Gradle — the wrapper JAR is NOT committed; generate it once
+# (or open in Android Studio):
 gradle wrapper
 
 ./gradlew assembleDebug                 # build debug APK
@@ -25,6 +31,9 @@ gradle wrapper
 ./gradlew :app:connectedAndroidTest     # Room DAO instrumentation test (needs a device/emulator)
 ```
 
+- `scripts/chirp-test.sh` is idempotent: it fetches only missing toolchain pieces,
+  reuses a persistent `GRADLE_USER_HOME` under the cache, and needs only `curl`,
+  `tar`, `python3` (no `unzip`, no sudo). `CHIRP_TOOLCHAIN` overrides the cache dir.
 - Requires **JDK 17** and the **Android SDK** (platform 35). Some sandboxes have no
   Android SDK — `:core:test` only needs the JDK, so prefer it for quick checks.
 - Dependency versions live in `gradle/libs.versions.toml`.

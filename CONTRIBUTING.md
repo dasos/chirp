@@ -19,7 +19,12 @@ local setup and the conventions the project follows.
 git clone <your-fork-url>
 cd chirp
 
-# The Gradle wrapper JAR is not committed — generate it once
+# No JDK/Gradle yet? This caches JDK 17 + Gradle 8.11.1 under
+# ~/.cache/chirp-toolchain and runs Gradle directly (no wrapper JAR needed):
+scripts/chirp-test.sh                 # fast JVM unit tests
+scripts/chirp-test.sh assembleDebug   # any Gradle args are forwarded
+
+# With a local Gradle — the wrapper JAR is not committed; generate it once
 # (Android Studio does this automatically on import):
 gradle wrapper
 
@@ -30,6 +35,10 @@ gradle wrapper
 
 `local.properties` (with `sdk.dir`) is created automatically by Android Studio;
 create it manually for headless CLI builds if needed.
+
+`scripts/chirp-test.sh` is idempotent — it fetches only missing toolchain pieces
+and needs only `curl`, `tar`, `python3` (no `unzip`, no sudo). Set
+`CHIRP_TOOLCHAIN` to override the cache directory (`~/.cache/chirp-toolchain`).
 
 ## Project layout
 

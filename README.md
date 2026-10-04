@@ -123,10 +123,16 @@ The `ConversationService` adds the Android concerns the pure controller shouldn'
 
 Requirements: **JDK 17**, the **Android SDK** (platform 35), and Android Studio (Ladybug or newer) or a local Gradle 8.11+.
 
+> **No JDK or Gradle installed?** `scripts/chirp-test.sh` caches JDK 17 + Gradle 8.11.1 under `~/.cache/chirp-toolchain` (idempotent; only fetches what's missing) and invokes Gradle directly, so no wrapper JAR is needed. It needs only `curl`, `tar` and `python3`. Set `CHIRP_TOOLCHAIN` to change the cache location.
+
 > **Gradle wrapper jar:** this repository ships the wrapper *config* (`gradle/wrapper/gradle-wrapper.properties`) but not the binary `gradle-wrapper.jar`. Opening the project in Android Studio generates it automatically. From the command line, run `gradle wrapper` once (with a locally installed Gradle) to create `gradlew` + the jar, then use `./gradlew` as below.
 
 ```bash
 # Android Studio: File ▸ Open ▸ select this directory, let it sync, then Run ▸ app.
+
+# No JDK/Gradle? Bootstrap path (any Gradle args are forwarded; assembleDebug still needs the Android SDK):
+scripts/chirp-test.sh                 # JVM unit tests
+scripts/chirp-test.sh assembleDebug   # build the debug APK
 
 # Command line:
 gradle wrapper            # one-time, if you don't already have ./gradlew + the jar
