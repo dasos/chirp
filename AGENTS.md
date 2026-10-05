@@ -49,24 +49,28 @@ gradle wrapper
 
 ## Module / package map
 
-Two Gradle modules — **respect the boundary**:
+Three Gradle modules — **respect the boundaries**:
 
 - **`:core`** — *pure Kotlin/JVM, no Android dependencies.* Portable logic + the
   interfaces the app implements. Must stay Android-free so it is JVM-unit-testable
-  and reusable by the future `:wear` module.
+  and reusable by the `:wear` module.
   - `model/` `session/` `speech/` `chat/` `wear/` `util/`
   - Key types: `SessionController` (the loop), `SentenceBuffer`, `OpenAiStreamParser`,
     `UtteranceAssembler`, `VadInputWindow`, the `SpeechToTextEngine`/`TextToSpeechEngine`/
     `Transcriber`/`Vad`/`ChatClient`/`ConversationStore`/`SettingsProvider` **interfaces**,
-    and `WearContract` (Phase 2).
+    and `WearContract` (the phone/watch Data Layer contract).
 - **`:app`** — Android. Implements the `:core` interfaces and adds everything
   framework-specific: `data/` (Room + EncryptedSharedPreferences), `network/`
   (OkHttp OpenRouter/OpenAI-compatible client + transcription), `speech/`
   (app-owned mic pipeline + TextToSpeech), `audio/` (focus + Bluetooth SCO + listening earcons),
-  `service/` (foreground service + notification), `ui/` (Compose), `di/` (Hilt).
+  `service/` (foreground service + notification), `ui/` (Compose), `wear/` (phone-side
+  Data Layer sync and command receiver), `di/` (Hilt).
+- **`:wear`** — Wear OS Android app. Renders phone-mirrored `SessionState`, sends
+  `SessionCommand`s through the Data Layer, and provides the quick-launch tile.
+  Audio, STT, TTS, chat, and the foreground service remain on the phone.
 
-`:app` depends on `:core`. `:core` depends on nothing Android. See the README
-"Architecture" section for the annotated tree.
+`:app` and `:wear` depend on `:core`; `:core` depends on nothing Android. See the
+README "Architecture" section for the annotated tree.
 
 ## Architecture invariants — do not break these
 
@@ -80,14 +84,14 @@ Two Gradle modules — **respect the boundary**:
    Interrupting a reply mid-stream persists the partial text (marked `…`) so
    nothing the user heard is lost.
 2. **One control funnel:** UI / notification buttons /
-   (future) Wear → `ConversationService` action intents → `SessionController`. Add
+   Wear → `ConversationService` action intents → `SessionController`. Add
    new control entry points as **service actions**, not by calling the controller
    from arbitrary places.
 3. **STT/TTS/Chat are used only through the `:core` interfaces.** To add server-side
    Whisper/Piper, write a new implementation + a Hilt binding — do not touch the
    controller or UI.
 4. `SessionController.state: StateFlow<SessionState>` is the **single source of
-   truth** rendered by the UI, the notification, and (Phase 2) the watch. One-off
+   truth** rendered by the UI, the notification, and the watch via `WearDataSync`. One-off
    effects (haptics) go through `events: SharedFlow<SessionEvent>`.
 5. **TTS cancellation must stop playback** (`AndroidTextToSpeech.speak` cancels →
    `engine.stop()`). Stop-speaking / interrupting rely on this.
@@ -172,9 +176,9 @@ server tool; search runs server-side and never interrupts the token stream.
 
 When you change the loop, the sentence buffer, or the parser, update/extend these.
 CI (`.github/workflows/ci.yml`) runs on **pull requests and `v*` tags** — not on
-pushes to `main`. PRs run `:core:test` + `assembleDebug` as a compile check; a tag
-additionally builds signed, minified **release** APKs, verifies the VAD model and
-ONNX native library survived R8, and publishes them to a GitHub Release.
+pushes to `main`. PRs run `:core:test` and assemble both phone and Wear debug APKs;
+a tag additionally builds signed, minified **release** APKs, verifies the VAD model
+and ONNX native library survived R8, and publishes both APKs to a GitHub Release.
 
 ## Releases
 
@@ -202,15 +206,15 @@ would need a real upload key injected from repository secrets.
 
 Commit frequently. Offer to push when appropriate.
 
-## Phase 2 (Wear OS) — architected, not built
+## Wear OS integration
 
 The watch is a thin remote that renders `SessionState` and sends `SessionCommand`s.
-The shared wire format is `core/wear/WearContract` (Data Layer paths +
-serialization). Integration points are marked `// PHASE 2`. To add it: create a
-`:wear` module (uncomment the include in `settings.gradle.kts`), depend on `:core`,
-add a phone-side `WearableListenerService` that publishes `SessionController.state`
-to `/chirp/state` and forwards `/chirp/command` messages into `ConversationService`
-actions, and a Wear Compose UI mirroring `SessionState`.
+The shared wire format is `core/wear/WearContract` (Data Layer paths and
+serialization). `app/wear/WearDataSync` publishes state to `/chirp/state`, while
+`PhoneWearMessageService` forwards `/chirp/command` messages into
+`ConversationService` actions. The `:wear` app consumes that state, sends commands,
+and exposes the quick-launch tile. Keep all watch controls on this Data Layer path;
+the watch must not call `SessionController` directly or grow its own audio pipeline.
 
 # Development style
 

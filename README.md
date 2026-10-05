@@ -30,7 +30,7 @@ Speak → speech-to-text → stream the reply from the chat backend → speak it
 - [In-app configuration](#in-app-configuration)
 - [Permissions](#permissions)
 - [Testing](#testing)
-- [Phase 2: Wear OS companion (architected, not built)](#phase-2-wear-os-companion-architected-not-built)
+- [Wear OS companion](#wear-os-companion)
 - [Known limitations](#known-limitations)
 - [Project status](#project-status)
 - [Contributing](#contributing)
@@ -50,6 +50,7 @@ Speak → speech-to-text → stream the reply from the chat backend → speak it
 - 🗣️ **Spoken errors** — "Connection lost", "I didn't hear anything", etc., with retry/backoff — because you're not looking at the screen.
 - 🎨 **Polished UI** — Material 3 with dynamic color, dark mode, an animated central mic/status indicator, and haptics on listen start/stop.
 - 🧩 **Swappable speech** — STT/TTS sit behind clean interfaces, so server-side Whisper/Piper can replace the on-device engines without touching the rest of the app.
+- ⌚ **Wear OS companion** — a watch remote mirrors the phone session, sends session controls over the Wearable Data Layer, and provides a quick-launch tile. Audio and network work remain on the phone.
 
 ## Screenshots
 
@@ -59,7 +60,7 @@ Speak → speech-to-text → stream the reply from the chat backend → speak it
 
 ## Architecture
 
-Two Gradle modules keep the portable session logic free of Android so it is unit-testable and reusable by the future Wear OS module.
+Three Gradle modules keep the portable session logic free of Android while sharing it with the Wear OS companion.
 
 ```
 :core   (pure Kotlin/JVM — no Android deps)
@@ -73,10 +74,10 @@ Two Gradle modules keep the portable session logic free of Android so it is unit
               SentenceBuffer
   chat/       ChatClient (interface), ChatStreamEvent, OpenAI-compatible wire DTOs,
               OpenAiStreamParser
-  wear/       WearContract  ← Phase 2 Data Layer paths + (de)serialization
+  wear/       WearContract  ← Data Layer paths + (de)serialization shared by phone/watch
   util/       DispatcherProvider, Clock
 
-:app    (Android)
+:app    (Android phone)
   data/local/      Room: entities, DAOs, ChirpDatabase
   data/repository/ ConversationRepository       (implements ConversationStore)
   data/settings/   SettingsRepository            (EncryptedSharedPreferences; implements SettingsProvider)
@@ -88,7 +89,14 @@ Two Gradle modules keep the portable session logic free of Android so it is unit
   audio/           AudioRouteManager (focus + Bluetooth SCO), ListeningCues (mic open/close earcons)
   service/         ConversationService (foreground), ConversationNotification
   ui/              theme, navigation, home, conversation, settings, components, permissions
+  wear/            WearDataSync, PhoneWearMessageService (phone side of Data Layer bridge)
   di/              Hilt modules (bind :core interfaces → Android impls)
+
+:wear   (Wear OS Android app)
+  WearMainActivity  mirrors phone SessionState and sends SessionCommand values
+  data/             WearStateRepository, WearCommandClient
+  ui/               compact watch UI and theme
+  tile/             quick-launch Chirp tile
 ```
 
 ### The loop
@@ -106,10 +114,10 @@ Every entry point funnels through the **foreground service** as an action intent
 ```
 UI (ConversationViewModel)  ─┐
 Notification buttons         ├─►  ConversationService (action intents)  ─►  SessionController
-(Phase 2) Wear Data Layer  ──┘         (audio focus + SCO + notification)
+Wear Data Layer  ───────────┘         (audio focus + SCO + notification)
 ```
 
-The `ConversationService` adds the Android concerns the pure controller shouldn't know about: audio focus, Bluetooth SCO routing (`AudioRouteManager`), and the persistent notification.
+The `ConversationService` adds the Android concerns the pure controller shouldn't know about: audio focus, Bluetooth SCO routing (`AudioRouteManager`), the persistent notification, and publishing state to the watch. Watch commands are received by `PhoneWearMessageService` and converted to the same service actions used by the phone UI and notification.
 
 ### Networking
 
@@ -142,6 +150,7 @@ gradle wrapper            # one-time, if you don't already have ./gradlew + the 
 # Tests:
 ./gradlew :core:test                 # JVM unit tests (sentence buffer, parser, controller, utterance assembler)
 ./gradlew :app:connectedAndroidTest  # Room DAO instrumentation test (needs a device/emulator)
+./gradlew :wear:assembleDebug        # build the Wear OS companion APK
 ```
 
 `local.properties` (pointing `sdk.dir` at your Android SDK) is created automatically by Android Studio; create it manually for CLI builds if needed.
@@ -213,14 +222,15 @@ Declared (no runtime prompt): `INTERNET`, `ACCESS_NETWORK_STATE`, `MODIFY_AUDIO_
 
 ---
 
-## Phase 2: Wear OS companion (architected, not built)
+## Wear OS companion
 
-The watch is intended as a thin remote: render `SessionState`, send `SessionCommand`s. The pieces are already in place:
+The watch app is a thin remote, not a second voice pipeline. It renders the phone's `SessionState`, sends `SessionCommand`s, and provides a static quick-launch tile. The phone remains responsible for the microphone, Bluetooth audio, speech-to-text, text-to-speech, chat requests, and foreground service.
 
-- `:core/wear/WearContract.kt` defines the **Data Layer** paths (`/chirp/state`, `/chirp/command`), the capability name, and (de)serialization of state/commands. Both the phone and a future `:wear` module depend on `:core`, so they share this vocabulary.
-- Session control already funnels through `ConversationService` action intents — the watch path is just "Data Layer message → decode with `WearContract` → start the service with the matching action." The hook points are marked with `PHASE 2` comments in `WearContract` and `SessionController`.
+- `:core/wear/WearContract.kt` defines the **Data Layer** paths (`/chirp/state`, `/chirp/command`), the phone capability name, and serialization of state/commands. The phone and `:wear` both depend on `:core`.
+- `app/wear/WearDataSync` publishes state and the phone's start-listening preference. `PhoneWearMessageService` receives watch commands and maps them to `ConversationService` actions, preserving the single control funnel.
+- `wear/WearMainActivity` observes the synced state and sends commands through `WearCommandClient`. `ChirpTileService` opens the watch app and can start a new phone conversation.
 
-To add it later: create a `:wear` module (uncomment the include in `settings.gradle.kts`), depend on `:core`, add a `WearableListenerService` on the phone that publishes `SessionController.state` to `/chirp/state` and forwards `/chirp/command` messages into the service, and a Wear Compose UI that mirrors `SessionState` and sends commands.
+Pair the watch with the phone and install both APKs signed with the same key. The watch must have a reachable phone advertising the `chirp_phone_session` capability; it does not need microphone or network access of its own.
 
 ---
 
@@ -232,13 +242,13 @@ To add it later: create a `:wear` module (uncomment the include in `settings.gra
 - **Web search is server-side** and billed per search by OpenRouter; generic OpenAI-compatible gateways may not support the `openrouter:web_search` tool, so disable the toggle when pointing at one.
 - **Sentence splitting is heuristic.** It handles decimals, common abbreviations, initials and dotted acronyms, but unusual punctuation may split imperfectly; a long unpunctuated stream is flushed at word boundaries so speech never stalls.
 - **`fallbackToDestructiveMigration()`** is used for the v1 Room database — fine for a single-version app, but add real migrations before shipping schema changes.
-- **The Gradle wrapper jar is not committed** (see [Build & run](#build--run)); Android Studio or `gradle wrapper` generates it. GitHub Actions CI compiles the app and runs the tests on every push.
+- **The Gradle wrapper jar is not committed** (see [Build & run](#build--run)); Android Studio or `gradle wrapper` generates it. GitHub Actions runs the JVM tests and builds both phone and Wear APKs on pull requests; version tags additionally produce signed release APKs.
 
 ---
 
 ## Project status
 
-Phase 1 (everything above) is implemented end to end. Phase 2 (the Wear OS companion) is **architected but not built** — the shared contract and integration points exist; see [above](#phase-2-wear-os-companion-architected-not-built). This is a personal/self-hosted project; contributions and issues are welcome.
+The phone app and Wear OS companion are implemented end to end. The watch is intentionally limited to remote controls and status display; all voice processing remains on the phone. This is a personal/self-hosted project; contributions and issues are welcome.
 
 ## Contributing
 

@@ -16,7 +16,7 @@ import com.chirp.wear.WearMainActivity
 import com.google.common.util.concurrent.ListenableFuture
 
 /**
- * Quick-launch Chirp tile (PHASE 2): tap opens [WearMainActivity] with
+ * Quick-launch Chirp tile: tap opens [WearMainActivity] with
  * [WearMainActivity.EXTRA_AUTO_START], which starts a new conversation (sending
  * `Listen` too when the phone's start-listening setting is on). The tile is
  * intentionally static for now; a full live-state tile would need a second Data

@@ -68,7 +68,7 @@ const val SPOKEN_OUTPUT_INSTRUCTION: String =
  *
  * On the phone this singleton is owned by `ConversationService` (which adds
  * audio focus, Bluetooth SCO and the foreground notification). The UI observes
- * [state]/[events]. PHASE 2: the Wear companion will issue the same
+ * [state]/[events]. The Wear companion issues the same
  * [SessionCommand]s through the service via the Data Layer.
  */
 @Singleton
@@ -653,10 +653,5 @@ class SessionController @Inject constructor(
 
     companion object {
         private const val THINKING_ANNOUNCEMENT = "Thinking..."
-
-        // PHASE 2 — WEAR INTEGRATION POINT:
-        // The service collects [state] and publishes it via WearContract.encodeState
-        // to the Data Layer; incoming Data Layer messages are decoded with
-        // WearContract.decodeCommand and fed to [dispatch].
     }
 }

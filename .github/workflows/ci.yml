@@ -1,6 +1,7 @@
 name: CI
 
-# Builds the app and runs the test suites on every push/PR. This doubles as an
+# Builds the phone and Wear apps and runs the test suites on every pull request
+# and version tag. This doubles as an
 # automated compile-check since the Gradle wrapper JAR is not committed: each job
 # installs a pinned Gradle (via setup-gradle) and invokes `gradle` directly, so no
 # wrapper JAR is required.

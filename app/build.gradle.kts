@@ -106,7 +106,7 @@ dependencies {
     // Encrypted settings
     implementation(libs.androidx.security.crypto)
 
-    // Wear OS bridge (Phase 2): Data Layer + WearableListenerService
+    // Wear OS bridge: Data Layer + WearableListenerService
     implementation(libs.play.services.wearable)
 
     // Coroutines / network

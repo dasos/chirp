@@ -2,7 +2,7 @@ package com.chirp.core.session
 
 /**
  * Commands that drive the session. Every entry point — the UI, the persistent
- * notification, headset media buttons, and (Phase 2) the Wear companion via the
+ * notification, headset media buttons, and the Wear companion via the
  * Data Layer — ultimately maps to one of these. They are funneled through
  * [com.chirp.core.session.SessionController] (on the phone, via the foreground
  * service). Kept as a serializable-friendly sealed type so the same vocabulary

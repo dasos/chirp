@@ -3,7 +3,7 @@ package com.chirp.core.session
 /**
  * Immutable snapshot of the conversation session. Exposed as a `StateFlow` by
  * the [SessionController] and consumed by the UI, the notification, and the
- * future Wear companion (serialized via [com.chirp.core.wear.WearContract]).
+ * Wear companion (serialized via [com.chirp.core.wear.WearContract]).
  */
 data class SessionState(
     val phase: SessionPhase = SessionPhase.IDLE,

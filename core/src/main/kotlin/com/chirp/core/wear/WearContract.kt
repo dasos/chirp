@@ -9,9 +9,7 @@ import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
 /**
- * PHASE 2 — WEAR OS INTEGRATION POINT.
- *
- * Shared contract between the phone and a future Wear OS companion, both of
+ * Shared contract between the phone and the Wear OS companion, both of
  * which depend on :core. The watch is a thin remote control: it renders
  * [SessionState] and sends [SessionCommand]s.
  *
@@ -21,7 +19,7 @@ import kotlinx.serialization.json.Json
  *
  * The actual Wearable* clients live in the Android modules (phone + watch); this
  * object only owns the wire format and path constants so both sides agree. The
- * phone-side publisher hook is marked in `ConversationService`.
+ * phone-side publisher and receiver live in the app module.
  */
 object WearContract {
 

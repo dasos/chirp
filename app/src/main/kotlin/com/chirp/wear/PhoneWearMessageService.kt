@@ -9,7 +9,7 @@ import com.google.android.gms.wearable.MessageEvent
 import com.google.android.gms.wearable.WearableListenerService
 
 /**
- * Phone-side receiver (PHASE 2): listens for `/chirp/command` messages from the
+ * Phone-side receiver: listens for `/chirp/command` messages from the
  * Wear companion, decodes them with [WearContract] and funnels each into a
  * [ConversationService] action intent. Keeps the single-control-funnel invariant:
  * the watch never touches the controller directly.

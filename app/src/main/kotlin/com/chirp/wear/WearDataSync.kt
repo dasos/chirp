@@ -20,7 +20,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Phone-side publisher (PHASE 2). Observes the singleton [SessionController]'s
+ * Phone-side publisher. Observes the singleton [SessionController]'s
  * state and the [SettingsRepository] and mirrors them to the watch as a `/chirp/state`
  * DataItem so the Wear companion renders the session and can honor the
  * "start listening on new conversation" setting. Started/stopped by

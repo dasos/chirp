@@ -28,7 +28,7 @@ import javax.inject.Inject
  * shows the persistent notification, and forwards control actions to the singleton
  * [SessionController].
  *
- * Every control path — UI, notification buttons, and (Phase 2) the Wear companion —
+ * Every control path — UI, notification buttons, and the Wear companion —
  * funnels through [onStartCommand] actions, which keeps a single source of truth
  * for session control.
  *

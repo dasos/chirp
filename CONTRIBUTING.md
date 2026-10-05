@@ -42,13 +42,17 @@ and needs only `curl`, `tar`, `python3` (no `unzip`, no sudo). Set
 
 ## Project layout
 
-Two Gradle modules:
+Three Gradle modules:
 
 - **`:core`** — pure Kotlin/JVM (no Android). The session state machine, the
   STT/TTS/chat interfaces, the sentence buffer, the SSE stream parser, and the Wear
   contract. Unit-tested here.
-- **`:app`** — Android. Implements the `:core` interfaces and adds UI, the
-  foreground service, audio/Bluetooth routing, persistence, and DI.
+- **`:app`** — Android phone. Implements the `:core` interfaces and adds UI, the
+  foreground service, audio/Bluetooth routing, persistence, phone-side Wear Data
+  Layer bridge, and DI.
+- **`:wear`** — Wear OS Android app. Renders phone session state, sends session
+  commands over the Data Layer, and provides the quick-launch tile. Audio and
+  network access remain on the phone.
 
 See [AGENTS.md](AGENTS.md) for the architecture invariants and gotchas, and the
 [README](README.md#architecture) for the annotated package tree.
@@ -70,7 +74,7 @@ See [AGENTS.md](AGENTS.md) for the architecture invariants and gotchas, and the
 
 1. `./gradlew :core:test` passes (add/extend tests for logic changes — especially
    the sentence buffer, the SSE parser, and the session loop).
-2. `./gradlew assembleDebug` compiles.
+2. `./gradlew assembleDebug :wear:assembleDebug` compiles the phone and watch apps.
 3. If you touched the Room schema, add a real `Migration` (don't rely on the
    destructive fallback in shipped builds).
 4. Update [README.md](README.md) and [AGENTS.md](AGENTS.md) if behavior or

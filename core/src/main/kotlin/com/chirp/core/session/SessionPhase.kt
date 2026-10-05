@@ -2,7 +2,7 @@ package com.chirp.core.session
 
 /**
  * High-level state of the hands-free loop. Rendered by the UI, the persistent
- * notification, and (Phase 2) the Wear companion.
+ * notification, and the Wear companion.
  */
 enum class SessionPhase {
     /** Session not running. */
